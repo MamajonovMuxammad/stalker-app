@@ -14,6 +14,24 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app, resources={r"/*": {"origins": "*"}})
+
+class VercelPathMiddleware:
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        query_string = environ.get('QUERY_STRING', '')
+        if '__path__=' in query_string:
+            import urllib.parse
+            params = urllib.parse.parse_qs(query_string, keep_blank_values=True)
+            if '__path__' in params and params['__path__']:
+                environ['PATH_INFO'] = params['__path__'][0]
+                del params['__path__']
+                environ['QUERY_STRING'] = urllib.parse.urlencode(params, doseq=True)
+        return self.wsgi_app(environ, start_response)
+
+app.wsgi_app = VercelPathMiddleware(app.wsgi_app)
+
 SECRET_KEY = "stalker-expedition-dossier-secret-key-1986"
 
 # Vercel Serverless environment handling (/tmp is writable)
@@ -220,22 +238,6 @@ def token_required(f):
             return jsonify({'error': 'Срок действия пропуска истёк или подпись недействительна'}), 401
         return f(current_user, *args, **kwargs)
     return decorated
-
-@app.errorhandler(405)
-def method_not_allowed(e):
-    return jsonify({
-        'error': f'405 Method Not Allowed on {request.method} {request.path}',
-        'path': request.path,
-        'method': request.method
-    }), 405
-
-@app.errorhandler(404)
-def not_found(e):
-    return jsonify({
-        'error': f'404 Not Found on {request.method} {request.path}',
-        'path': request.path,
-        'method': request.method
-    }), 404
 
 # ── ROUTES ─────────────────────────────────────────────────────────────
 
