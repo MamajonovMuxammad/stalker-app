@@ -4,6 +4,8 @@ import datetime
 import uuid
 import jwt
 import random
+import json
+import urllib.request
 import shutil
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory
@@ -11,7 +13,7 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__, static_folder='.', static_url_path='')
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 SECRET_KEY = "stalker-expedition-dossier-secret-key-1986"
 
 # Vercel Serverless environment handling (/tmp is writable)
@@ -33,8 +35,24 @@ else:
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
 
-# Telegram Bot username for verification
+# Telegram Bot Credentials
+TELEGRAM_BOT_TOKEN = "8902880627:AAG9tIwu8f1vZfEFXQUVZK3Bzzy7SMoDL9U"
 TELEGRAM_BOT_USERNAME = "stalker_recon_bot"
+
+def send_telegram_message(chat_id, text):
+    if not TELEGRAM_BOT_TOKEN or not chat_id:
+        return
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = json.dumps({
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML"
+        }).encode('utf-8')
+        req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        print("Telegram send error:", e)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -169,10 +187,20 @@ try:
 except Exception as err:
     print("Database init warning:", err)
 
+# CORS headers hook
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
+    return response
+
 # Auth Decorator
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        if request.method == 'OPTIONS':
+            return jsonify({'status': 'ok'}), 200
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith("Bearer "):
             return jsonify({'error': 'Допуск не предоставлен: токен авторизации отсутствует'}), 401
@@ -193,12 +221,16 @@ def index():
     return send_from_directory('.', 'index.html')
 
 @app.route('/uploads/<path:filename>')
+@app.route('/api/uploads/<path:filename>')
 def serve_upload(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
-@app.route('/api/upload', methods=['POST'])
-@app.route('/upload', methods=['POST'])
+@app.route('/api/upload', methods=['POST', 'OPTIONS'])
+@app.route('/upload', methods=['POST', 'OPTIONS'])
 def upload_file():
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
     if 'file' not in request.files and 'files' not in request.files:
         return jsonify({'error': 'Файлы для загрузки не найдены'}), 400
     
@@ -226,11 +258,76 @@ def upload_file():
         'url': uploaded_urls[0] if uploaded_urls else None
     })
 
-# ── Telegram Phone Verification ─────────────────────────────────────────
+# ── Telegram Phone Verification & Webhook ───────────────────────────────
 
-@app.route('/api/auth/send-tg-code', methods=['POST'])
-@app.route('/auth/send-tg-code', methods=['POST'])
+@app.route('/api/tg/webhook', methods=['POST', 'GET'])
+@app.route('/tg/webhook', methods=['POST', 'GET'])
+def telegram_webhook():
+    if request.method == 'GET':
+        return jsonify({'status': 'online', 'bot': TELEGRAM_BOT_USERNAME})
+
+    data = request.get_json() or {}
+    message = data.get('message', {})
+    chat = message.get('chat', {})
+    chat_id = chat.get('id')
+    text = message.get('text', '').strip()
+    contact = message.get('contact', {})
+
+    if not chat_id:
+        return jsonify({'ok': True})
+
+    # If user clicked /start verify_123456
+    if text.startswith('/start'):
+        parts = text.split()
+        if len(parts) > 1 and parts[1].startswith('verify_'):
+            code = parts[1].replace('verify_', '').strip()
+            welcome = (
+                f"🛡️ <b>STALKER ARCHIVE SECURITY</b>\n\n"
+                f"Ваш проверочный код доступа:\n"
+                f"🔑 <code>{code}</code>\n\n"
+                f"Введите этот 6-значный код на сайте для завершения регистрации."
+            )
+            send_telegram_message(chat_id, welcome)
+            return jsonify({'ok': True})
+        else:
+            welcome = (
+                f"🛡️ <b>STALKER ARCHIVE BOT</b>\n\n"
+                f"Бот службы безопасности платформы STALKER.\n"
+                f"Для получения проверочного кода перейдите по ссылке с сайта регистрации."
+            )
+            send_telegram_message(chat_id, welcome)
+            return jsonify({'ok': True})
+
+    if contact and contact.get('phone_number'):
+        raw_phone = contact.get('phone_number').replace('+', '').replace(' ', '')
+        code = f"{random.randint(100000, 999999)}"
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+        INSERT INTO phone_verifications (phone, code, created_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(phone) DO UPDATE SET code = excluded.code, created_at = excluded.created_at
+        """, (f"+{raw_phone}", code, datetime.datetime.now().isoformat()))
+        conn.commit()
+        conn.close()
+
+        msg = (
+            f"✅ <b>Номер подтверждён: +{raw_phone}</b>\n\n"
+            f"Ваш проверочный код доступа: <code>{code}</code>\n"
+            f"Введите его на сайте регистрации."
+        )
+        send_telegram_message(chat_id, msg)
+        return jsonify({'ok': True})
+
+    send_telegram_message(chat_id, "Команда не распознана. Для регистрации нажмите кнопку на сайте.")
+    return jsonify({'ok': True})
+
+@app.route('/api/auth/send-tg-code', methods=['POST', 'OPTIONS'])
+@app.route('/auth/send-tg-code', methods=['POST', 'OPTIONS'])
 def send_tg_code():
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
     data = request.get_json() or {}
     phone = data.get('phone', '').strip().replace(' ', '').replace('-', '')
     if not phone or len(phone) < 7:
@@ -258,9 +355,12 @@ def send_tg_code():
         'phone': phone
     })
 
-@app.route('/api/auth/register', methods=['POST'])
-@app.route('/auth/register', methods=['POST'])
+@app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
+@app.route('/auth/register', methods=['POST', 'OPTIONS'])
 def register():
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
     data = request.get_json() or {}
     username = data.get('username', '').strip()
     email = data.get('email', '').strip()
@@ -324,9 +424,12 @@ def register():
         }
     }), 201
 
-@app.route('/api/auth/login', methods=['POST'])
-@app.route('/auth/login', methods=['POST'])
+@app.route('/api/auth/login', methods=['POST', 'OPTIONS'])
+@app.route('/auth/login', methods=['POST', 'OPTIONS'])
 def login():
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
     data = request.get_json() or {}
     username = data.get('username', '').strip()
     password = data.get('password', '').strip()
@@ -376,10 +479,13 @@ def login():
 
 # ── User Geolocation Update ─────────────────────────────────────────────
 
-@app.route('/api/user/location', methods=['POST'])
-@app.route('/user/location', methods=['POST'])
+@app.route('/api/user/location', methods=['POST', 'OPTIONS'])
+@app.route('/user/location', methods=['POST', 'OPTIONS'])
 @token_required
 def update_user_location(current_user):
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
     data = request.get_json() or {}
     lat = data.get('lat')
     lng = data.get('lng')
@@ -397,9 +503,12 @@ def update_user_location(current_user):
 
 # ── Locations Routes ────────────────────────────────────────────────────
 
-@app.route('/api/locations', methods=['GET'])
-@app.route('/locations', methods=['GET'])
+@app.route('/api/locations', methods=['GET', 'OPTIONS'])
+@app.route('/locations', methods=['GET', 'OPTIONS'])
 def get_locations():
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
     conn = get_db()
     cursor = conn.cursor()
     
@@ -449,9 +558,12 @@ def get_locations():
         })
     return jsonify(result)
 
-@app.route('/api/locations/<loc_id>', methods=['GET'])
-@app.route('/locations/<loc_id>', methods=['GET'])
+@app.route('/api/locations/<loc_id>', methods=['GET', 'OPTIONS'])
+@app.route('/locations/<loc_id>', methods=['GET', 'OPTIONS'])
 def get_location(loc_id):
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM locations WHERE id = ?", (loc_id,))
@@ -483,12 +595,24 @@ def get_location(loc_id):
 
 # ── Admin Location Edit & Delete ────────────────────────────────────────
 
-@app.route('/api/admin/locations/<loc_id>', methods=['PUT'])
-@app.route('/admin/locations/<loc_id>', methods=['PUT'])
+@app.route('/api/admin/locations/<loc_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
+@app.route('/admin/locations/<loc_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
 @token_required
-def update_location(current_user, loc_id):
+def modify_location(current_user, loc_id):
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
     if current_user.get('role') != 'admin':
         return jsonify({'error': 'Требуется уровень допуска Администратора Архива'}), 403
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if request.method == 'DELETE':
+        cursor.execute("DELETE FROM locations WHERE id = ?", (loc_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Объект удалён из реестра'})
 
     data = request.get_json() or {}
     name = data.get('name', '').strip()
@@ -505,10 +629,9 @@ def update_location(current_user, loc_id):
     photos_str = ",".join(photos) if isinstance(photos, list) else str(photos)
 
     if not name or not region:
+        conn.close()
         return jsonify({'error': 'Название и регион обязательны'}), 400
 
-    conn = get_db()
-    cursor = conn.cursor()
     cursor.execute("""
     UPDATE locations SET
         name = ?, type = ?, icon = ?, color = ?, region = ?,
@@ -520,62 +643,56 @@ def update_location(current_user, loc_id):
 
     return jsonify({'message': 'Объект успешно обновлён'})
 
-@app.route('/api/admin/locations/<loc_id>', methods=['DELETE'])
-@app.route('/admin/locations/<loc_id>', methods=['DELETE'])
-@token_required
-def delete_location(current_user, loc_id):
-    if current_user.get('role') != 'admin':
-        return jsonify({'error': 'Требуется уровень допуска Администратора Архива'}), 403
-
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM locations WHERE id = ?", (loc_id,))
-    conn.commit()
-    conn.close()
-
-    return jsonify({'message': 'Объект удалён из реестра'})
-
 # ── Submissions Routes ──────────────────────────────────────────────────
 
-@app.route('/api/submissions', methods=['GET'])
-@app.route('/submissions', methods=['GET'])
-def get_submissions():
-    status = request.args.get('status', 'all')
-    conn = get_db()
-    cursor = conn.cursor()
-    if status == 'all':
-        cursor.execute("SELECT * FROM submissions ORDER BY date DESC")
-    else:
-        cursor.execute("SELECT * FROM submissions WHERE status = ? ORDER BY date DESC", (status,))
-    rows = cursor.fetchall()
-    conn.close()
+@app.route('/api/submissions', methods=['GET', 'POST', 'OPTIONS'])
+@app.route('/submissions', methods=['GET', 'POST', 'OPTIONS'])
+def handle_submissions():
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
 
-    result = []
-    for r in rows:
-        result.append({
-            'id': r['id'],
-            'name': r['name'],
-            'type': r['type'],
-            'icon': r['icon'] if 'icon' in r.keys() and r['icon'] else 'bunker',
-            'color': r['color'] if 'color' in r.keys() and r['color'] else '#2563EB',
-            'region': r['region'],
-            'lat': r['lat'],
-            'lng': r['lng'],
-            'difficulty': r['difficulty'],
-            'status': r['status'],
-            'author': r['author'],
-            'date': r['date'],
-            'description': r['description'],
-            'access': r['access'],
-            'photos': r['photos'].split(',') if r['photos'] else [],
-            'resolution': r['resolution']
-        })
-    return jsonify(result)
+    if request.method == 'GET':
+        status = request.args.get('status', 'all')
+        conn = get_db()
+        cursor = conn.cursor()
+        if status == 'all':
+            cursor.execute("SELECT * FROM submissions ORDER BY date DESC")
+        else:
+            cursor.execute("SELECT * FROM submissions WHERE status = ? ORDER BY date DESC", (status,))
+        rows = cursor.fetchall()
+        conn.close()
 
-@app.route('/api/submissions', methods=['POST'])
-@app.route('/submissions', methods=['POST'])
-@token_required
-def create_submission(current_user):
+        result = []
+        for r in rows:
+            result.append({
+                'id': r['id'],
+                'name': r['name'],
+                'type': r['type'],
+                'icon': r['icon'] if 'icon' in r.keys() and r['icon'] else 'bunker',
+                'color': r['color'] if 'color' in r.keys() and r['color'] else '#2563EB',
+                'region': r['region'],
+                'lat': r['lat'],
+                'lng': r['lng'],
+                'difficulty': r['difficulty'],
+                'status': r['status'],
+                'author': r['author'],
+                'date': r['date'],
+                'description': r['description'],
+                'access': r['access'],
+                'photos': r['photos'].split(',') if r['photos'] else [],
+                'resolution': r['resolution']
+            })
+        return jsonify(result)
+
+    # POST - Requires Token
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify({'error': 'Допуск не предоставлен'}), 401
+    try:
+        current_user = jwt.decode(auth_header.split(" ")[1], SECRET_KEY, algorithms=["HS256"])
+    except Exception:
+        return jsonify({'error': 'Недействительный токен'}), 401
+
     data = request.get_json() or {}
     name = data.get('name', '').strip()
     loc_type = data.get('type', 'abandoned')
@@ -591,7 +708,7 @@ def create_submission(current_user):
     photos_str = ",".join(photos) if isinstance(photos, list) else str(photos)
 
     if not name or not region:
-        return jsonify({'error': 'Обязательные поля: наименование объекта и регион расположения'}), 400
+        return jsonify({'error': 'Обязательные поля: наименование объекта и регион'}), 400
 
     sub_id = f"sub-{int(datetime.datetime.now().timestamp())}"
     now_date = datetime.date.today().isoformat()
@@ -609,10 +726,13 @@ def create_submission(current_user):
 
 # ── Admin Moderation & Stats ────────────────────────────────────────────
 
-@app.route('/api/admin/submissions/<sub_id>/approve', methods=['POST'])
-@app.route('/admin/submissions/<sub_id>/approve', methods=['POST'])
+@app.route('/api/admin/submissions/<sub_id>/approve', methods=['POST', 'OPTIONS'])
+@app.route('/admin/submissions/<sub_id>/approve', methods=['POST', 'OPTIONS'])
 @token_required
 def approve_submission(current_user, sub_id):
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
     if current_user.get('role') != 'admin':
         return jsonify({'error': 'Требуется уровень допуска Администратора Архива'}), 403
 
@@ -643,10 +763,13 @@ def approve_submission(current_user, sub_id):
 
     return jsonify({'message': 'Место одобрено', 'location_id': loc_id})
 
-@app.route('/api/admin/submissions/<sub_id>/reject', methods=['POST'])
-@app.route('/admin/submissions/<sub_id>/reject', methods=['POST'])
+@app.route('/api/admin/submissions/<sub_id>/reject', methods=['POST', 'OPTIONS'])
+@app.route('/admin/submissions/<sub_id>/reject', methods=['POST', 'OPTIONS'])
 @token_required
 def reject_submission(current_user, sub_id):
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
     if current_user.get('role') != 'admin':
         return jsonify({'error': 'Требуется уровень допуска Администратора Архива'}), 403
 
@@ -663,10 +786,13 @@ def reject_submission(current_user, sub_id):
 
     return jsonify({'message': 'Заявка отклонена'})
 
-@app.route('/api/admin/radar', methods=['GET'])
-@app.route('/admin/radar', methods=['GET'])
+@app.route('/api/admin/radar', methods=['GET', 'OPTIONS'])
+@app.route('/admin/radar', methods=['GET', 'OPTIONS'])
 @token_required
 def get_admin_radar(current_user):
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
     if current_user.get('role') != 'admin':
         return jsonify({'error': 'Доступ запрещён'}), 403
 
@@ -692,9 +818,12 @@ def get_admin_radar(current_user):
 
     return jsonify(users)
 
-@app.route('/api/admin/stats', methods=['GET'])
-@app.route('/admin/stats', methods=['GET'])
+@app.route('/api/admin/stats', methods=['GET', 'OPTIONS'])
+@app.route('/admin/stats', methods=['GET', 'OPTIONS'])
 def get_stats():
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM locations WHERE status = 'approved'")
