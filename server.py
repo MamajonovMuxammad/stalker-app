@@ -22,12 +22,17 @@ IS_VERCEL = os.environ.get('VERCEL') == '1' or 'VERCEL_ENV' in os.environ
 if IS_VERCEL:
     DB_PATH = "/tmp/stalker.db"
     UPLOAD_FOLDER = "/tmp/uploads"
-    local_db = os.path.join(os.path.dirname(__file__), "stalker.db")
-    if os.path.exists(local_db) and not os.path.exists(DB_PATH):
-        try:
-            shutil.copyfile(local_db, DB_PATH)
-        except Exception as e:
-            print("DB copy error:", e)
+    for candidate in [
+        os.path.join(os.path.dirname(__file__), "stalker.db"),
+        os.path.join(os.path.dirname(__file__), "..", "stalker.db"),
+        os.path.join(os.getcwd(), "stalker.db")
+    ]:
+        if os.path.exists(candidate) and not os.path.exists(DB_PATH):
+            try:
+                shutil.copyfile(candidate, DB_PATH)
+                break
+            except Exception as e:
+                print("DB copy error:", e)
 else:
     DB_PATH = os.path.join(os.path.dirname(__file__), "stalker.db")
     UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "uploads")
@@ -928,6 +933,8 @@ def get_stats():
         'rejected_submissions': rejected_count,
         'registered_stalkers': users_count
     })
+
+handler = app
 
 if __name__ == '__main__':
     print("=== STALKER Backend initialized ===")

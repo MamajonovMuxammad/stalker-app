@@ -1,18 +1,14 @@
 {
-  "version": 2,
   "rewrites": [
     {
-      "source": "/api",
-      "destination": "/api/index"
-    },
-    {
       "source": "/api/(.*)",
-      "destination": "/api/index"
+      "destination": "/api/index.py"
     },
     {
       "source": "/uploads/(.*)",
-      "destination": "/api/index"
+      "destination": "/api/index.py"
     }
   ]
 }
+
 
