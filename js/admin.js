@@ -1,10 +1,14 @@
 /* ==========================================================
-   STALKER — Admin / Moderation Panel v2
+   STALKER — Admin / Moderation Panel v2.2
+   Submissions moderation + Stalker Geolocation Radar
    ========================================================== */
 
 let adminCurrentFilter = 'all';
 let allSubmissions = [];
+let allRadarUsers = [];
 let rejectTargetId = null;
+let radarMap = null;
+let radarMarkersLayer = null;
 
 /* ── Render Nav Auth ─────────────────────────────────────── */
 function renderNavAuth() {
@@ -41,10 +45,10 @@ async function loadStats() {
   try {
     const stats = await API.get('/admin/stats');
     const el = id => document.getElementById(id);
-    if (el('stat-total-locs'))   el('stat-total-locs').textContent   = stats.total_locations   || 0;
-    if (el('stat-pending-subs')) el('stat-pending-subs').textContent = stats.pending_submissions || 0;
+    if (el('stat-total-locs'))    el('stat-total-locs').textContent    = stats.total_locations    || 0;
+    if (el('stat-pending-subs'))  el('stat-pending-subs').textContent  = stats.pending_submissions  || 0;
     if (el('stat-rejected-subs')) el('stat-rejected-subs').textContent = stats.rejected_submissions || 0;
-    if (el('stat-users-count'))  el('stat-users-count').textContent  = stats.registered_stalkers || 0;
+    if (el('stat-users-count'))   el('stat-users-count').textContent   = stats.registered_stalkers  || 0;
   } catch (e) {
     console.warn('Stats load error', e);
   }
@@ -84,6 +88,24 @@ function updateBadgeCounts() {
 /* ── Render Submissions ──────────────────────────────────── */
 function renderSubmissions() {
   const listEl = document.getElementById('submissions-list');
+  const radarContainer = document.getElementById('radar-container');
+  const sectionTitle = document.getElementById('admin-section-title');
+  const sectionSubtitle = document.getElementById('admin-section-subtitle');
+
+  if (adminCurrentFilter === 'radar') {
+    if (listEl) listEl.style.display = 'none';
+    if (radarContainer) radarContainer.style.display = 'flex';
+    if (sectionTitle) sectionTitle.textContent = 'Радар следопытов';
+    if (sectionSubtitle) sectionSubtitle.textContent = 'Мониторинг активных пользователей, геопозиций и реестр контактов (🔒 Служба Безопасности)';
+    loadRadar();
+    return;
+  }
+
+  if (listEl) listEl.style.display = 'block';
+  if (radarContainer) radarContainer.style.display = 'none';
+  if (sectionTitle) sectionTitle.textContent = 'Заявки на модерацию';
+  if (sectionSubtitle) sectionSubtitle.textContent = 'Верификация координат, фотоматериалов и принятие решений';
+
   if (!listEl) return;
 
   const filtered = adminCurrentFilter === 'all'
@@ -149,6 +171,103 @@ function renderSubmissions() {
           ${actions}
         </div>
       </div>`;
+  }).join('');
+}
+
+/* ── Radar & User Geolocation ────────────────────────────── */
+async function loadRadar() {
+  try {
+    allRadarUsers = await API.get('/admin/radar');
+  } catch (e) {
+    allRadarUsers = [];
+    Toast.error('Не удалось загрузить данные радара');
+    return;
+  }
+
+  initRadarMap();
+  renderRadarUsers();
+}
+
+function initRadarMap() {
+  const mapEl = document.getElementById('radar-map');
+  if (!mapEl) return;
+
+  if (!radarMap) {
+    radarMap = L.map('radar-map', {
+      center: [41.3111, 69.2406],
+      zoom: 11,
+      zoomControl: true,
+    });
+
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(radarMap);
+
+    radarMarkersLayer = L.layerGroup().addTo(radarMap);
+  } else {
+    setTimeout(() => radarMap.invalidateSize(), 150);
+  }
+
+  radarMarkersLayer.clearLayers();
+
+  allRadarUsers.forEach(u => {
+    if (u.coords && u.coords[0] && u.coords[1]) {
+      const pulseSvg = `
+        <div style="position:relative; width:24px; height:24px;">
+          <div style="position:absolute; inset:0; border-radius:50%; background:var(--accent); opacity:0.8; animation: ping 1.5s cubic-bezier(0,0,0.2,1) infinite;"></div>
+          <div style="position:absolute; inset:4px; border-radius:50%; background:#fff; border:2px solid var(--accent);"></div>
+        </div>
+      `;
+      const icon = L.divIcon({
+        html: pulseSvg,
+        className: '',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      });
+
+      const marker = L.marker([u.coords[0], u.coords[1]], { icon });
+      marker.bindPopup(`
+        <div style="font-family:var(--font); padding:4px;">
+          <div style="font-weight:700; font-size:13px; color:#F1F1F1;">${u.callsign || u.username}</div>
+          <div style="font-size:11px; color:#60A5FA; margin-top:2px;">📞 ${u.phone}</div>
+          <div style="font-size:10px; color:#888; margin-top:4px;">${u.coords[0].toFixed(4)}, ${u.coords[1].toFixed(4)}</div>
+        </div>
+      `);
+      radarMarkersLayer.addLayer(marker);
+    }
+  });
+}
+
+function renderRadarUsers() {
+  const tbody = document.getElementById('radar-users-tbody');
+  if (!tbody) return;
+
+  if (allRadarUsers.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-tertiary);">Пользователи отсутствуют</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = allRadarUsers.map(u => {
+    const coordsStr = u.coords ? `${u.coords[0].toFixed(4)}, ${u.coords[1].toFixed(4)}` : '<span style="color:var(--text-tertiary);">Не зафиксированы</span>';
+    const roleBadge = u.role === 'admin'
+      ? `<span class="badge" style="border-color:var(--accent); color:var(--accent);">Админ</span>`
+      : `<span class="badge">Следопыт</span>`;
+
+    return `
+      <tr>
+        <td>
+          <div style="font-weight:600; color:var(--text-primary);">${u.callsign || u.username}</div>
+          <div style="font-size:var(--text-xs); color:var(--text-tertiary);">${u.email}</div>
+        </td>
+        <td>
+          <code style="color:var(--accent); font-weight:700; font-size:var(--text-xs);">${u.phone}</code>
+        </td>
+        <td>${roleBadge}</td>
+        <td style="font-family:monospace; font-size:var(--text-xs);">${coordsStr}</td>
+        <td style="font-size:var(--text-xs); color:var(--text-tertiary);">${u.last_seen || u.created_at || '—'}</td>
+      </tr>
+    `;
   }).join('');
 }
 
@@ -240,7 +359,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const confirmBtn = document.getElementById('btn-confirm-reject');
   if (confirmBtn) confirmBtn.addEventListener('click', confirmReject);
 
-  // Close modal on backdrop click
   const modal = document.getElementById('reject-modal');
   if (modal) {
     modal.addEventListener('click', e => {

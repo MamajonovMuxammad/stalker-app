@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Панель модерации — STALKER</title>
-  <meta name="description" content="Административная панель модерации заявок на STALKER.">
+  <meta name="description" content="Административная панель модерации заявок и радар пользователей на STALKER.">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
   <!-- Design System CSS -->
   <link rel="stylesheet" href="/css/tokens.css">
@@ -121,6 +124,15 @@
         </button>
 
         <hr style="margin: var(--sp-3) 0;">
+        <div class="admin-sidebar-title">Безопасность и Радар</div>
+
+        <button class="admin-nav-item" data-status="radar" style="color:var(--accent);">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/></svg>
+          Радар пользователей
+          <span class="badge accent" id="count-radar" style="margin-left:auto;">LIVE</span>
+        </button>
+
+        <hr style="margin: var(--sp-3) 0;">
         <div class="admin-sidebar-title">Быстрые действия</div>
         <a href="/submit.html" class="admin-nav-item" style="text-decoration:none;">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
@@ -136,14 +148,46 @@
       <main class="admin-main" role="main">
         <div class="section-header" style="margin-bottom: var(--sp-6);">
           <div>
-            <h2 class="section-title" style="font-size:var(--text-lg);">Заявки</h2>
-            <p class="section-subtitle" style="font-size:var(--text-sm);">Верификация координат, фотоматериалов и принятие решений</p>
+            <h2 class="section-title" id="admin-section-title" style="font-size:var(--text-lg);">Заявки</h2>
+            <p class="section-subtitle" id="admin-section-subtitle" style="font-size:var(--text-sm);">Верификация координат, фотоматериалов и принятие решений</p>
           </div>
         </div>
 
+        <!-- Submissions List -->
         <div id="submissions-list">
           <div class="empty-state">
             <div class="loading-spinner"></div>
+          </div>
+        </div>
+
+        <!-- Radar Section (hidden by default) -->
+        <div id="radar-container" style="display:none; flex-direction:column; gap:var(--sp-6);">
+          <div class="card" style="overflow:hidden;">
+            <div class="card-header">
+              <h3 style="font-size:var(--text-base); font-weight:700;">Интерактивная карта геопозиций следопытов</h3>
+              <span class="badge accent">Приватно (Только СБ)</span>
+            </div>
+            <div id="radar-map" style="height:360px; width:100%;"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3 style="font-size:var(--text-base); font-weight:700;">Реестр пользователей и номера телефонов</h3>
+            </div>
+            <div class="table-wrapper">
+              <table class="table" style="width:100%;">
+                <thead>
+                  <tr>
+                    <th>Позывной / Логин</th>
+                    <th>Телефон (🔒 СБ)</th>
+                    <th>Роль</th>
+                    <th>Координаты</th>
+                    <th>Последняя активность</th>
+                  </tr>
+                </thead>
+                <tbody id="radar-users-tbody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </main>
@@ -176,7 +220,6 @@
           ></textarea>
         </div>
 
-        <!-- Quick templates -->
         <div>
           <p style="font-size:var(--text-xs); color:var(--text-tertiary); margin-bottom:var(--sp-2);">Быстрые шаблоны:</p>
           <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
@@ -198,6 +241,9 @@
   </div>
 
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
   <script src="/js/data.js"></script>
   <script src="/js/admin.js"></script>

@@ -48,18 +48,36 @@ const Auth = {
   isLoggedIn(){ return !!this.getToken(); },
   isAdmin()  { const u = this.getUser(); return u && u.role === 'admin'; },
 
-  async login(username, password) {
-    const data = await API.post('/auth/login', { username, password });
+  async login(username, password, lat = null, lng = null) {
+    const data = await API.post('/auth/login', { username, password, lat, lng });
     localStorage.setItem('stalker_token', data.token);
     localStorage.setItem('stalker_user',  JSON.stringify(data.user));
     return data.user;
   },
 
-  async register(username, password, email, callsign) {
-    const data = await API.post('/auth/register', { username, password, email, callsign });
+  async register(username, password, email, callsign, phone, code, lat = null, lng = null) {
+    const data = await API.post('/auth/register', { username, password, email, callsign, phone, code, lat, lng });
     localStorage.setItem('stalker_token', data.token);
     localStorage.setItem('stalker_user',  JSON.stringify(data.user));
     return data.user;
+  },
+
+  async syncLocation() {
+    if (!this.isLoggedIn()) return;
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            await API.post('/user/location', {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude
+            });
+          } catch (e) { /* ignore */ }
+        },
+        () => {},
+        { enableHighAccuracy: false, timeout: 5000 }
+      );
+    }
   },
 
   logout() {

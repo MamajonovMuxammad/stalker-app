@@ -237,6 +237,9 @@ async function handleSubmit(e) {
   const lat         = parseFloat(document.getElementById('sub-lat')?.value);
   const lng         = parseFloat(document.getElementById('sub-lng')?.value);
 
+  const icon        = document.getElementById('sub-icon')?.value || 'bunker';
+  const color       = document.getElementById('sub-color')?.value || '#2563EB';
+
   // Manual URLs if any
   const manualRaw   = document.getElementById('sub-photos-url')?.value || '';
   const manualUrls  = manualRaw.split('\n').map(s => s.trim()).filter(Boolean);
@@ -254,7 +257,7 @@ async function handleSubmit(e) {
 
   try {
     await API.post('/submissions', {
-      name, type, region, description, access, difficulty,
+      name, type, icon, color, region, description, access, difficulty,
       lat: isNaN(lat) ? null : lat,
       lng: isNaN(lng) ? null : lng,
       photos,
@@ -270,11 +273,52 @@ async function handleSubmit(e) {
   }
 }
 
+function setupPickers() {
+  // Difficulty picker
+  document.querySelectorAll('#difficulty-picker .difficulty-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#difficulty-picker .difficulty-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.background = 'var(--bg-hover)';
+        b.style.borderColor = 'var(--border)';
+        b.style.color = 'var(--text-secondary)';
+      });
+      btn.classList.add('active');
+      btn.style.background = 'var(--accent-light)';
+      btn.style.borderColor = 'var(--accent)';
+      btn.style.color = 'var(--accent)';
+      const input = document.getElementById('sub-difficulty');
+      if (input) input.value = btn.dataset.val;
+    });
+  });
+
+  // Icon picker
+  document.querySelectorAll('#icon-picker .icon-picker-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#icon-picker .icon-picker-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const input = document.getElementById('sub-icon');
+      if (input) input.value = btn.dataset.icon;
+    });
+  });
+
+  // Color picker
+  document.querySelectorAll('#color-picker .color-swatch').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#color-picker .color-swatch').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const input = document.getElementById('sub-color');
+      if (input) input.value = btn.dataset.color;
+    });
+  });
+}
+
 /* ── Init ────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   setupNavAuth();
   initPickerMap();
   setupFileUpload();
+  setupPickers();
 
   const form = document.getElementById('submit-location-form');
   if (form) form.addEventListener('submit', handleSubmit);

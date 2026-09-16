@@ -142,7 +142,50 @@
                       5 — Экстрим
                     </button>
                   </div>
-                  <input type="hidden" id="sub-difficulty" value="3" />
+                <!-- Icon Picker -->
+                <div class="form-group">
+                  <label class="form-label">Иконка маркера на карте</label>
+                  <div class="icon-picker-grid" id="icon-picker">
+                    <button type="button" class="icon-picker-btn active" data-icon="bunker">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L4 5v6c0 5 3.4 9.8 8 11 4.6-1.2 8-6 8-11V5l-8-3z"/></svg>
+                      Бункер
+                    </button>
+                    <button type="button" class="icon-picker-btn" data-icon="radiation">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 9a3 3 0 0 1 2.6 1.5l2.6-1.5A6 6 0 0 0 12 6v3z"/><path d="M9.4 13.5a3 3 0 0 1 0-3L6.8 9a6 6 0 0 0 0 6l2.6-1.5z"/><path d="M14.6 13.5a3 3 0 0 1-2.6 1.5v3a6 6 0 0 0 5.2-3l-2.6-1.5z"/></svg>
+                      Радиация
+                    </button>
+                    <button type="button" class="icon-picker-btn" data-icon="industrial">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21h16V9l-4 3V9l-4 3V6l-8 4v11z"/></svg>
+                      Завод
+                    </button>
+                    <button type="button" class="icon-picker-btn" data-icon="building">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="9" y1="8" x2="11" y2="8"/><line x1="13" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="11" y2="12"/><line x1="13" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="11" y2="16"/><line x1="13" y1="16" x2="15" y2="16"/></svg>
+                      Здание
+                    </button>
+                    <button type="button" class="icon-picker-btn" data-icon="underground">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="13" rx="2"/><circle cx="8" cy="13" r="1"/><circle cx="16" cy="13" r="1"/><path d="M4 17l4 3m8-3l4 3"/></svg>
+                      Подземка
+                    </button>
+                    <button type="button" class="icon-picker-btn" data-icon="military">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><circle cx="12" cy="12" r="2"/></svg>
+                      Военный
+                    </button>
+                  </div>
+                  <input type="hidden" id="sub-icon" value="bunker" />
+                </div>
+
+                <!-- Color Picker -->
+                <div class="form-group">
+                  <label class="form-label">Цвет метки</label>
+                  <div class="color-picker-row" id="color-picker">
+                    <button type="button" class="color-swatch active" data-color="#2563EB" style="background:#2563EB;" title="Синий"></button>
+                    <button type="button" class="color-swatch" data-color="#F59E0B" style="background:#F59E0B;" title="Оранжевый"></button>
+                    <button type="button" class="color-swatch" data-color="#EF4444" style="background:#EF4444;" title="Красный"></button>
+                    <button type="button" class="color-swatch" data-color="#8B5CF6" style="background:#8B5CF6;" title="Фиолетовый"></button>
+                    <button type="button" class="color-swatch" data-color="#10B981" style="background:#10B981;" title="Изумрудный"></button>
+                    <button type="button" class="color-swatch" data-color="#06B6D4" style="background:#06B6D4;" title="Бирюзовый"></button>
+                  </div>
+                  <input type="hidden" id="sub-color" value="#2563EB" />
                 </div>
 
                 <div class="form-group">

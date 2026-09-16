@@ -1,6 +1,9 @@
 /* ==========================================================
-   STALKER — Location Detail Page Controller v2
+   STALKER — Location Detail Page Controller v2.2
+   Admin edit/delete capabilities + custom icon/colors
    ========================================================== */
+
+let currentLocationData = null;
 
 const TYPE_LABELS_LOC = {
   bunker:      'Бункер',
@@ -77,6 +80,7 @@ async function loadLocation() {
 
   try {
     const loc = await API.get(`/locations/${locId}`);
+    currentLocationData = loc;
     if (loadingEl) loadingEl.style.display = 'none';
     renderLocation(loc);
     if (contentEl) contentEl.style.display = 'block';
@@ -92,6 +96,9 @@ async function loadLocation() {
 function renderLocation(loc) {
   const contentEl = document.getElementById('location-content');
   if (!contentEl) return;
+
+  const user = Auth.getUser();
+  const isAdmin = user && user.role === 'admin';
 
   const lat = loc.lat ?? (loc.coords && loc.coords[0]);
   const lng = loc.lng ?? (loc.coords && loc.coords[1]);
@@ -130,6 +137,23 @@ function renderLocation(loc) {
         </div>` : ''}
     </div>` : '';
 
+  // Admin Controls Bar
+  const adminBarHtml = isAdmin ? `
+    <div style="display:flex;gap:var(--sp-2);margin-bottom:var(--sp-5);padding:var(--sp-3) var(--sp-4);background:var(--bg-elevated);border:1px solid var(--accent);border-radius:10px;align-items:center;">
+      <span style="font-size:var(--text-xs);font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em;">Панель Администратора:</span>
+      <div style="margin-left:auto;display:flex;gap:var(--sp-2);">
+        <button class="btn btn-secondary btn-sm" onclick="openEditModal()">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Редактировать
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="deleteLocation('${loc.id}')">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Удалить
+        </button>
+      </div>
+    </div>
+  ` : '';
+
   // Meta info sidebar
   const metaRows = [
     { icon: '📍', label: 'Регион', value: loc.region },
@@ -159,6 +183,7 @@ function renderLocation(loc) {
 
   contentEl.innerHTML = `
     ${breadcrumb}
+    ${adminBarHtml}
     ${heroHtml}
 
     <div class="location-layout">
@@ -235,6 +260,85 @@ function renderLocation(loc) {
     }, 100);
   }
 }
+
+/* ── Admin Edit & Delete Actions ─────────────────────────── */
+window.openEditModal = function() {
+  if (!currentLocationData) return;
+  const loc = currentLocationData;
+  const lat = loc.lat ?? (loc.coords && loc.coords[0]) ?? '';
+  const lng = loc.lng ?? (loc.coords && loc.coords[1]) ?? '';
+
+  document.getElementById('edit-name').value = loc.name || '';
+  document.getElementById('edit-type').value = loc.type || 'bunker';
+  document.getElementById('edit-region').value = loc.region || '';
+  document.getElementById('edit-lat').value = lat;
+  document.getElementById('edit-lng').value = lng;
+  document.getElementById('edit-icon').value = loc.icon || 'bunker';
+  document.getElementById('edit-color').value = loc.color || '#2563EB';
+  document.getElementById('edit-difficulty').value = loc.difficulty || 3;
+  document.getElementById('edit-description').value = loc.description || '';
+  document.getElementById('edit-access').value = loc.access || '';
+
+  const modal = document.getElementById('edit-loc-modal');
+  if (modal) modal.classList.add('open');
+};
+
+window.closeEditModal = function() {
+  const modal = document.getElementById('edit-loc-modal');
+  if (modal) modal.classList.remove('open');
+};
+
+window.saveLocationEdit = async function() {
+  if (!currentLocationData) return;
+  const locId = currentLocationData.id;
+
+  const name = document.getElementById('edit-name').value.trim();
+  const type = document.getElementById('edit-type').value;
+  const region = document.getElementById('edit-region').value.trim();
+  const lat = parseFloat(document.getElementById('edit-lat').value);
+  const lng = parseFloat(document.getElementById('edit-lng').value);
+  const icon = document.getElementById('edit-icon').value;
+  const color = document.getElementById('edit-color').value;
+  const difficulty = parseInt(document.getElementById('edit-difficulty').value || '3');
+  const description = document.getElementById('edit-description').value.trim();
+  const access = document.getElementById('edit-access').value.trim();
+
+  if (!name || !region) {
+    Toast.error('Название и регион обязательны');
+    return;
+  }
+
+  const btn = document.getElementById('btn-save-loc-edit');
+  if (btn) { btn.disabled = true; btn.textContent = 'Сохранение...'; }
+
+  try {
+    await API.put(`/admin/locations/${locId}`, {
+      name, type, region, lat, lng, icon, color, difficulty, description, access,
+      photos: currentLocationData.photos || []
+    });
+    Toast.success('Объект успешно обновлён');
+    closeEditModal();
+    loadLocation();
+  } catch (err) {
+    Toast.error(err.message || 'Ошибка обновления');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Сохранить изменения'; }
+  }
+};
+
+window.deleteLocation = async function(locId) {
+  if (!confirm('Вы уверены, что хотите удалить этот объект из архива? Действие необратимо.')) {
+    return;
+  }
+
+  try {
+    await API.del(`/admin/locations/${locId}`);
+    Toast.success('Объект удалён');
+    setTimeout(() => window.location.href = '/catalog.html', 800);
+  } catch (err) {
+    Toast.error(err.message || 'Ошибка при удалении');
+  }
+};
 
 function toggleBookmark(locId) {
   let list = [];
