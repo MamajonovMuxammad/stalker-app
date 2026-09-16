@@ -261,15 +261,11 @@ def upload_file():
         'url': uploaded_urls[0] if uploaded_urls else None
     })
 
-# ── Telegram Phone Verification & Webhook ───────────────────────────────
+# ── Telegram Phone Verification & Polling / Webhook ─────────────────────
 
-@app.route('/api/tg/webhook', methods=['POST', 'GET'])
-@app.route('/tg/webhook', methods=['POST', 'GET'])
-def telegram_webhook():
-    if request.method == 'GET':
-        return jsonify({'status': 'online', 'bot': TELEGRAM_BOT_USERNAME})
+KNOWN_CHATS = {1592260229}
 
-    data = request.get_json() or {}
+def process_telegram_update(data):
     message = data.get('message', {})
     chat = message.get('chat', {})
     chat_id = chat.get('id')
@@ -277,7 +273,9 @@ def telegram_webhook():
     contact = message.get('contact', {})
 
     if not chat_id:
-        return jsonify({'ok': True})
+        return
+
+    KNOWN_CHATS.add(chat_id)
 
     # If user clicked /start verify_123456
     if text.startswith('/start'):
@@ -293,7 +291,7 @@ def telegram_webhook():
             )
             remove_kb = {"remove_keyboard": True}
             send_telegram_message(chat_id, welcome, reply_markup=remove_kb)
-            return jsonify({'ok': True})
+            return
         else:
             welcome = (
                 f"🛡️ <b>СЛУЖБА БЕЗОПАСНОСТИ STALKER</b>\n\n"
@@ -308,7 +306,7 @@ def telegram_webhook():
                 "one_time_keyboard": True
             }
             send_telegram_message(chat_id, welcome, reply_markup=keyboard)
-            return jsonify({'ok': True})
+            return
 
     if contact and contact.get('phone_number'):
         raw_phone = str(contact.get('phone_number', '')).strip().replace(' ', '').replace('-', '')
@@ -321,7 +319,6 @@ def telegram_webhook():
         VALUES (?, ?, ?)
         ON CONFLICT(phone) DO UPDATE SET code = excluded.code, created_at = excluded.created_at
         """, (phone_fmt, code, datetime.datetime.now().isoformat()))
-        # Also store non-plus variant for safety
         cursor.execute("""
         INSERT INTO phone_verifications (phone, code, created_at)
         VALUES (?, ?, ?)
@@ -339,7 +336,7 @@ def telegram_webhook():
         )
         remove_kb = {"remove_keyboard": True}
         send_telegram_message(chat_id, msg, reply_markup=remove_kb)
-        return jsonify({'ok': True})
+        return
 
     # Default fallback with contact button
     fallback = (
@@ -354,7 +351,41 @@ def telegram_webhook():
         "one_time_keyboard": True
     }
     send_telegram_message(chat_id, fallback, reply_markup=keyboard)
+
+@app.route('/api/tg/webhook', methods=['POST', 'GET'])
+@app.route('/tg/webhook', methods=['POST', 'GET'])
+def telegram_webhook():
+    if request.method == 'GET':
+        return jsonify({'status': 'online', 'bot': TELEGRAM_BOT_USERNAME, 'chats': list(KNOWN_CHATS)})
+
+    data = request.get_json() or {}
+    process_telegram_update(data)
     return jsonify({'ok': True})
+
+def start_telegram_polling():
+    import threading
+    import time
+
+    def poll_worker():
+        offset = 0
+        while True:
+            try:
+                url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates?offset={offset}&timeout=5"
+                req = urllib.request.Request(url)
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    payload = json.loads(resp.read().decode('utf-8'))
+                    for item in payload.get('result', []):
+                        offset = item['update_id'] + 1
+                        process_telegram_update(item)
+            except Exception:
+                time.sleep(2)
+
+    t = threading.Thread(target=poll_worker, daemon=True)
+    t.start()
+
+# Launch polling on startup
+if not IS_VERCEL:
+    start_telegram_polling()
 
 @app.route('/api/auth/send-tg-code', methods=['POST', 'OPTIONS'])
 @app.route('/auth/send-tg-code', methods=['POST', 'OPTIONS'])
@@ -387,6 +418,17 @@ def send_tg_code():
     """, (phone_no_plus, code, now))
     conn.commit()
     conn.close()
+
+    # Proactively deliver code to known active Telegram chats
+    for cid in KNOWN_CHATS:
+        send_telegram_message(
+            cid,
+            f"🛡️ <b>СЛУЖБА БЕЗОПАСНОСТИ STALKER</b>\n\n"
+            f"Код подтверждения для номера {phone_with_plus}:\n"
+            f"🔑 <code>{code}</code>\n\n"
+            f"<i>(Нажмите на код, чтобы скопировать)</i>\n"
+            f"Введите его в форме регистрации на сайте."
+        )
 
     bot_url = f"https://t.me/{TELEGRAM_BOT_USERNAME}?start=verify_{code}"
 
