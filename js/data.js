@@ -275,14 +275,14 @@ if (document.readyState === 'loading') {
   }
 })();
 
-/* ── Location Guard (Security Geolocation Blocker) ────────── */
+/* ── Location Guard (Minimalist Geolocation Handler) ──────── */
 const LocationGuard = {
   coords: null,
   isVerified: false,
 
   check() {
     if (!('geolocation' in navigator)) {
-      this.showBlocker('Ваш браузер или устройство не поддерживает определение геопозиции.');
+      this.showBlocker('Ваш браузер или устройство не поддерживает геолокацию.');
       return;
     }
 
@@ -299,20 +299,23 @@ const LocationGuard = {
       (err) => {
         this.coords = null;
         this.isVerified = false;
-        let msg = 'Для работы с картой и объектами Зоны необходимо разрешить передачу геопозиции.';
+        let msg = 'Для отображения вашего положения на карте и поиска объектов разрешите доступ к местоположению.';
         if (err.code === err.PERMISSION_DENIED) {
-          msg = 'Доступ к местоположению отклонён или заблокирован в браузере. Без геопозиции использование системы STALKER закрыто.';
+          msg = 'Доступ к местоположению отклонён или заблокирован в браузере. Разрешите доступ в настройках страницы.';
         }
         this.showBlocker(msg);
       },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 0 }
     );
   },
 
   showBlocker(reasonText) {
     if (document.getElementById('location-guard-overlay')) {
       const msgEl = document.getElementById('location-guard-reason');
-      if (msgEl) msgEl.textContent = reasonText;
+      if (msgEl) {
+        msgEl.style.display = 'block';
+        msgEl.textContent = reasonText;
+      }
       return;
     }
 
@@ -321,53 +324,65 @@ const LocationGuard = {
     overlay.className = 'location-guard-overlay';
 
     const isAdmin = Auth.isAdmin();
+    const isTelegram = /Telegram/i.test(navigator.userAgent);
 
     overlay.innerHTML = `
       <div class="location-guard-card">
-        <div class="location-guard-radar">
-          <div class="radar-ping"></div>
-          <div class="radar-circle">
-            <svg width="34" height="34" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-              <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+        <button class="location-guard-close-btn" id="btn-location-guard-close" aria-label="Закрыть">✕</button>
+        
+        <div class="location-guard-icon-wrap">
+          <div class="location-guard-icon-circle">
+            <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"/>
+              <circle cx="12" cy="10" r="3"/>
             </svg>
           </div>
         </div>
 
-        <div class="location-guard-badge">⚠️ СЛУЖБА БЕЗОПАСНОСТИ СБ · ДОСТУП ОГРАНИЧЕН</div>
+        <div class="location-guard-badge">📍 Геолокация</div>
         
-        <h2 class="location-guard-title">ТРЕБУЕТСЯ ГЕОЛОКАЦИЯ</h2>
+        <h2 class="location-guard-title">Доступ к геопозиции</h2>
         
         <p class="location-guard-desc">
-          Для обеспечения безопасности сталкеров, мониторинга Зоны и работы интерактивной карты объектов, доступ к платформе <b>STALKER</b> открывается только при активной передаче геопозиции.
+          Для работы карты и навигации по объектам разрешите браузеру доступ к вашему местоположению.
         </p>
 
-        <div class="location-guard-status" id="location-guard-reason">
-          ${reasonText || 'Доступ к местоположению заблокирован или не предоставлен'}
+        <div class="location-guard-status" id="location-guard-reason" style="${reasonText ? '' : 'display:none;'}">
+          ${reasonText || ''}
         </div>
 
-        <button class="btn btn-primary btn-block location-guard-btn" id="btn-location-guard-request">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="10"/>
-            <polygon points="12 8 8 12 12 16 12 8"/>
-            <line x1="12" y1="16" x2="12" y2="12"/>
-          </svg>
-          Разрешить доступ к местоположению
-        </button>
+        <div class="location-guard-actions">
+          <button class="btn btn-primary location-guard-btn" id="btn-location-guard-request">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+            </svg>
+            <span>Предоставить доступ</span>
+          </button>
+
+          <button class="btn btn-secondary location-guard-btn" id="btn-location-guard-open-browser" style="display:${isTelegram ? 'flex' : 'none'};">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="2" y1="12" x2="22" y2="12"/>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+            <span>Открыть в основном браузере (Chrome)</span>
+          </button>
+        </div>
 
         ${isAdmin ? `
-          <div style="margin-top:14px;">
+          <div style="margin-top:12px;">
             <button type="button" id="btn-admin-bypass-loc" style="background:none; border:none; color:var(--text-tertiary); font-size:11px; cursor:pointer; text-decoration:underline;">
-              🛡️ Режим СБ: Продолжить без GPS (Администратор)
+              🛡️ Продолжить без GPS (Администратор)
             </button>
           </div>
         ` : ''}
 
         <div class="location-guard-help">
-          <div class="help-title">🔒 Если вы нажали «Заблокировать» в браузере:</div>
+          <div class="help-title">💡 Если окно разрешения не появилось:</div>
           <ol class="help-steps">
-            <li>Нажмите на <b>значок замка 🔒</b> (или параметров сайта) слева от адресной строки.</li>
-            <li>В пункте <b>«Местоположение» (Геопозиция)</b> выберите <b>«Разрешить»</b>.</li>
-            <li>Нажмите кнопку «Разрешить» выше или обновите страницу (<b>F5</b>).</li>
+            <li>Вверху экрана нажмите на <b>значок 🔒 или меню ⋮</b> в строке адреса.</li>
+            <li>В разделе <b>«Разрешения»</b> включите <b>«Местоположение»</b>.</li>
+            <li>Затем нажмите кнопку «Предоставить доступ» снова или обновите страницу.</li>
           </ol>
         </div>
       </div>
@@ -376,14 +391,32 @@ const LocationGuard = {
     document.body.appendChild(overlay);
     document.body.classList.add('location-guard-active');
 
+    // Close button handler
+    const closeBtn = overlay.querySelector('#btn-location-guard-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        this.hideBlocker();
+      });
+    }
+
+    // Open in external browser for Telegram webviews
+    const openExtBtn = overlay.querySelector('#btn-location-guard-open-browser');
+    if (openExtBtn) {
+      openExtBtn.addEventListener('click', () => {
+        window.open(window.location.href, '_system');
+      });
+    }
+
+    // Request permission button
     const reqBtn = overlay.querySelector('#btn-location-guard-request');
     if (reqBtn) {
       reqBtn.addEventListener('click', () => {
         reqBtn.disabled = true;
-        reqBtn.innerHTML = `<span>Связь со спутниками GPS...</span>`;
+        reqBtn.innerHTML = `<span>Запрос разрешения у браузера...</span>`;
+        
         navigator.geolocation.getCurrentPosition(
           (pos) => {
-            Toast.success('Геопозиция подтверждена! Доступ разрешён.');
+            Toast.success('Геопозиция определена! Добро пожаловать.');
             this.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
             this.isVerified = true;
             this.hideBlocker();
@@ -393,16 +426,29 @@ const LocationGuard = {
           },
           (err) => {
             reqBtn.disabled = false;
-            reqBtn.innerHTML = `<span>Повторить запрос</span>`;
-            let errText = 'Доступ к геопозиции всё ещё заблокирован браузером.';
-            if (err.code === err.PERMISSION_DENIED) {
-              errText = 'Запрос отклонён. Разрешите геопозицию в настройках браузера (значок замочка в строке адреса) и нажмите кнопку снова.';
-            }
-            Toast.error(errText);
+            reqBtn.innerHTML = `
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+              </svg>
+              <span>Повторить запрос разрешения</span>
+            `;
+            
             const reasonEl = document.getElementById('location-guard-reason');
-            if (reasonEl) reasonEl.textContent = errText;
+            if (reasonEl) {
+              reasonEl.style.display = 'block';
+              if (err.code === err.PERMISSION_DENIED) {
+                reasonEl.innerHTML = '⚠️ Доступ заблокирован браузером. Нажмите на значок 🔒 или меню ⋮ в строке адреса вверху экрана ➔ включите «Местоположение» и нажмите снова.';
+              } else {
+                reasonEl.innerHTML = 'Не удалось получить координаты. Проверьте, включена ли служба геолокации в настройках телефона.';
+              }
+            }
+            
+            const openBrowserBtn = document.getElementById('btn-location-guard-open-browser');
+            if (openBrowserBtn) {
+              openBrowserBtn.style.display = 'flex';
+            }
           },
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+          { enableHighAccuracy: false, timeout: 15000, maximumAge: 0 }
         );
       });
     }
@@ -413,7 +459,7 @@ const LocationGuard = {
         bypassBtn.addEventListener('click', (e) => {
           e.preventDefault();
           this.hideBlocker();
-          Toast.info('Режим СБ: допуск предоставлен без передачи координат');
+          Toast.info('Режим СБ: допуск без передачи координат');
         });
       }
     }
@@ -426,7 +472,7 @@ const LocationGuard = {
       setTimeout(() => {
         overlay.remove();
         document.body.classList.remove('location-guard-active');
-      }, 300);
+      }, 250);
     }
   }
 };

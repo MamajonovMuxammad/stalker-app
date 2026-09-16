@@ -83,10 +83,6 @@ window.setAuthMode = function(mode) {
   isRegisterMode = (mode === 'register');
   clearErrors();
   generateCaptcha();
-  if (isRegisterMode) {
-    // Proactively request browser location permission on registration tab
-    getCoordinates();
-  }
 };
 
 function clearErrors() {
@@ -167,7 +163,7 @@ function getCoordinates() {
         }
         resolve({ lat: null, lng: null, error: err });
       },
-      { timeout: 8000, enableHighAccuracy: true, maximumAge: 0 }
+      { timeout: 15000, enableHighAccuracy: false, maximumAge: 0 }
     );
   });
 }
