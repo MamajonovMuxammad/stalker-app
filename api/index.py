@@ -221,6 +221,22 @@ def token_required(f):
         return f(current_user, *args, **kwargs)
     return decorated
 
+@app.errorhandler(405)
+def method_not_allowed(e):
+    return jsonify({
+        'error': f'405 Method Not Allowed on {request.method} {request.path}',
+        'path': request.path,
+        'method': request.method
+    }), 405
+
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({
+        'error': f'404 Not Found on {request.method} {request.path}',
+        'path': request.path,
+        'method': request.method
+    }), 404
+
 # ── ROUTES ─────────────────────────────────────────────────────────────
 
 # Serve Static HTML & assets
