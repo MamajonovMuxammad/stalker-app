@@ -150,6 +150,7 @@ function getCoordinates() {
     }
     navigator.geolocation.getCurrentPosition(
       pos => {
+        try { localStorage.setItem('stalker_geo_allowed', 'true'); } catch (e) {}
         if (typeof LocationGuard !== 'undefined') {
           LocationGuard.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           LocationGuard.isVerified = true;
@@ -157,6 +158,9 @@ function getCoordinates() {
         resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
       err => {
+        if (err && err.code === err.PERMISSION_DENIED) {
+          try { localStorage.removeItem('stalker_geo_allowed'); } catch (e) {}
+        }
         if (typeof LocationGuard !== 'undefined') {
           LocationGuard.coords = null;
           LocationGuard.isVerified = false;

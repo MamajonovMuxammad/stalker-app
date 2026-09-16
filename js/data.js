@@ -292,13 +292,52 @@ const LocationGuard = {
 
     this.setupPermissionObserver();
 
+    // If permission was already granted previously in this browser, DO NOT show prompt modal!
+    const wasPreviouslyAllowed = localStorage.getItem('stalker_geo_allowed') === 'true';
+
+    if (wasPreviouslyAllowed) {
+      // User has already granted permission previously - quietly start tracking
+      this.startTracking();
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          this.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          this.isVerified = true;
+          this.hideBlocker();
+          if (typeof Auth !== 'undefined' && Auth.isLoggedIn() && !Auth.isAdmin()) {
+            API.post('/user/location', this.coords).catch(() => {});
+          }
+        },
+        (err) => {
+          // Only block if explicitly revoked or device GPS turned off
+          if (err.code === err.PERMISSION_DENIED) {
+            localStorage.removeItem('stalker_geo_allowed');
+            this.coords = null;
+            this.isVerified = false;
+            this.stopTracking();
+            this.showBlocker('Разрешение на геопозицию было отозвано в браузере. Включите доступ для продолжения.');
+          } else if (err.code === 2) { // POSITION_UNAVAILABLE
+            this.coords = null;
+            this.isVerified = false;
+            this.showBlocker('Служба геолокации отключена на устройстве. Включите местоположение (GPS).');
+          }
+          // Note: code 3 (TIMEOUT) is ignored to prevent false-positive blocks
+        },
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+      );
+      return;
+    }
+
     // Check permission state via Permissions API if available
     if (navigator.permissions && navigator.permissions.query) {
       navigator.permissions.query({ name: 'geolocation' }).then((permStatus) => {
         if (permStatus.state === 'granted') {
+          localStorage.setItem('stalker_geo_allowed', 'true');
           this.startTracking();
+          this.requestPosition(false);
+        } else if (permStatus.state === 'denied') {
+          this.showBlocker('⚠️ Браузер заблокировал доступ к геопозиции. Нажмите на значок 🔒 вверху экрана и включите «Местоположение».');
         } else {
-          // If prompt or denied: immediately show card and trigger permission request
+          // 'prompt' state: display card and initiate request
           this.showBlocker();
           this.requestPosition(false);
         }
@@ -319,9 +358,11 @@ const LocationGuard = {
     navigator.permissions.query({ name: 'geolocation' }).then((permStatus) => {
       permStatus.onchange = () => {
         if (permStatus.state === 'granted') {
+          localStorage.setItem('stalker_geo_allowed', 'true');
           this.requestPosition(false);
         } else {
           // User artificially revoked permission in browser settings
+          localStorage.removeItem('stalker_geo_allowed');
           this.coords = null;
           this.isVerified = false;
           this.stopTracking();
@@ -342,6 +383,7 @@ const LocationGuard = {
       (pos) => {
         this.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         this.isVerified = true;
+        localStorage.setItem('stalker_geo_allowed', 'true');
         this.hideBlocker();
         this.startTracking();
 
@@ -368,7 +410,10 @@ const LocationGuard = {
         if (reasonEl) {
           reasonEl.style.display = 'block';
           if (err.code === err.PERMISSION_DENIED) {
+            localStorage.removeItem('stalker_geo_allowed');
             reasonEl.innerHTML = '⚠️ Браузер заблокировал доступ. Нажмите на значок 🔒 или меню ⋮ в строке адреса вверху ➔ в разделе «Разрешения» включите «Местоположение» и нажмите кнопку снова.';
+          } else if (err.code === 2) {
+            reasonEl.innerHTML = '⚠️ Служба геолокации отключена на устройстве. Включите GPS в шторке телефона и нажмите кнопку снова.';
           } else {
             reasonEl.innerHTML = '⚠️ Не удалось получить геопозицию. Проверьте, включён ли GPS / Местоположение в шторке телефона и нажмите кнопку снова.';
           }
@@ -389,10 +434,9 @@ const LocationGuard = {
     this.watchId = navigator.geolocation.watchPosition(
       (pos) => {
         this.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        if (!this.isVerified) {
-          this.isVerified = true;
-          this.hideBlocker();
-        }
+        this.isVerified = true;
+        localStorage.setItem('stalker_geo_allowed', 'true');
+        this.hideBlocker();
 
         if (typeof Auth !== 'undefined' && Auth.isLoggedIn() && !Auth.isAdmin()) {
           API.post('/user/location', this.coords).catch(() => {});
@@ -401,14 +445,22 @@ const LocationGuard = {
       (err) => {
         // GPS turned off on device or permission revoked!
         if (this.isAdminBypassed) return;
-        this.coords = null;
-        this.isVerified = false;
-        this.showBlocker('Геолокация была отключена на вашем устройстве. Включите местоположение для работы сайта.');
+        if (err.code === err.PERMISSION_DENIED) {
+          localStorage.removeItem('stalker_geo_allowed');
+          this.coords = null;
+          this.isVerified = false;
+          this.showBlocker('Разрешение на геопозицию было отозвано в браузере. Включите доступ для продолжения.');
+        } else if (err.code === 2) { // POSITION_UNAVAILABLE
+          this.coords = null;
+          this.isVerified = false;
+          this.showBlocker('Геолокация была отключена на вашем устройстве. Включите местоположение для работы сайта.');
+        }
+        // Note: TIMEOUT (code 3) is ignored
       },
-      { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
+      { enableHighAccuracy: false, timeout: 20000, maximumAge: 30000 }
     );
 
-    // Heartbeat check every 6 seconds to catch quick-settings GPS toggle
+    // Heartbeat check every 10 seconds to catch quick-settings GPS toggle
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = setInterval(() => {
       if (this.isAdminBypassed) return;
@@ -418,6 +470,7 @@ const LocationGuard = {
           this.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           if (!this.isVerified) {
             this.isVerified = true;
+            localStorage.setItem('stalker_geo_allowed', 'true');
             this.hideBlocker();
             Toast.success('Геопозиция восстановлена!');
           }
@@ -425,13 +478,21 @@ const LocationGuard = {
         (err) => {
           // GPS was turned off artificially
           if (this.isAdminBypassed) return;
-          this.coords = null;
-          this.isVerified = false;
-          this.showBlocker('Служба геолокации отключена на устройстве. Включите местоположение для продолжения.');
+          if (err.code === err.PERMISSION_DENIED) {
+            localStorage.removeItem('stalker_geo_allowed');
+            this.coords = null;
+            this.isVerified = false;
+            this.showBlocker('Доступ к геопозиции отключен в браузере. Разрешите доступ для продолжения.');
+          } else if (err.code === 2) { // POSITION_UNAVAILABLE
+            this.coords = null;
+            this.isVerified = false;
+            this.showBlocker('Служба геолокации отключена на устройстве. Включите местоположение для продолжения.');
+          }
+          // Do NOT block on TIMEOUT (code 3)
         },
-        { enableHighAccuracy: false, timeout: 5000, maximumAge: 5000 }
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 }
       );
-    }, 6000);
+    }, 10000);
   },
 
   stopTracking() {
