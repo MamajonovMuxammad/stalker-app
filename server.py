@@ -13,6 +13,16 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 
+try:
+    from supabase_client import SupabaseDB
+except ImportError:
+    try:
+        from api.supabase_client import SupabaseDB
+    except ImportError:
+        import sys
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        from supabase_client import SupabaseDB
+
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app, resources={r"/*": {"origins": "*"}})
 
@@ -438,6 +448,13 @@ def send_tg_code():
     code = f"{random.randint(100000, 999999)}"
     now = datetime.datetime.now().isoformat()
 
+    # Save verification code to Supabase and SQLite fallback
+    try:
+        SupabaseDB.upsert_phone_code(phone_with_plus, code)
+        SupabaseDB.upsert_phone_code(phone_no_plus, code)
+    except Exception as e:
+        print("[Supabase] phone verification upsert error:", e)
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
@@ -505,32 +522,75 @@ def register():
     if not phone:
         return jsonify({'error': 'Номер телефона обязателен для авторизации в системе безопасности'}), 400
 
-    conn = get_db()
-    cursor = conn.cursor()
-
-    # Verify phone code (check both with and without plus)
     phone_with_plus = phone if phone.startswith('+') else f"+{phone}"
     phone_no_plus = phone.replace('+', '')
-    cursor.execute("SELECT code FROM phone_verifications WHERE phone = ? OR phone = ? ORDER BY created_at DESC LIMIT 1", (phone_with_plus, phone_no_plus))
-    ver = cursor.fetchone()
-    if not ver or ver['code'] != code:
-        conn.close()
-        return jsonify({'error': 'Неверный 6-значный код подтверждения из Telegram бота'}), 400
 
-    cursor.execute("SELECT id FROM users WHERE username = ? OR email = ?", (username, email))
-    if cursor.fetchone():
+    # 1. Verify phone code via Supabase
+    tg_code = None
+    try:
+        tg_code = SupabaseDB.get_latest_phone_code(phone_with_plus, phone_no_plus)
+    except Exception as e:
+        print("[Supabase] get_latest_phone_code error:", e)
+
+    if not tg_code or tg_code != code:
+        # Fallback to local SQLite
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT code FROM phone_verifications WHERE phone = ? OR phone = ? ORDER BY created_at DESC LIMIT 1", (phone_with_plus, phone_no_plus))
+        ver = cursor.fetchone()
         conn.close()
+        if not ver or ver['code'] != code:
+            return jsonify({'error': 'Неверный 6-значный код подтверждения из Telegram бота'}), 400
+
+    # 2. Check duplicate username or email in Supabase
+    existing = None
+    try:
+        existing = SupabaseDB.get_user_by_username_or_email(username)
+        if not existing:
+            existing = SupabaseDB.get_user_by_username_or_email(email)
+    except Exception as e:
+        print("[Supabase] duplicate check error:", e)
+
+    if existing:
         return jsonify({'error': 'Исследователь с таким логином или email уже зарегистрирован'}), 400
 
     now_iso = datetime.datetime.now().isoformat()
     pwd_hash = generate_password_hash(password)
-    cursor.execute("""
-    INSERT INTO users (username, email, password_hash, role, callsign, phone, phone_verified, clearance_level, last_lat, last_lng, last_seen, created_at, status)
-    VALUES (?, ?, ?, 'stalker', ?, ?, 1, 1, ?, ?, ?, ?, 'pending')
-    """, (username, email, pwd_hash, callsign, phone, lat, lng, now_iso, now_iso))
-    conn.commit()
-    user_id = cursor.lastrowid
-    conn.close()
+
+    user_payload = {
+        'username': username,
+        'email': email,
+        'password_hash': pwd_hash,
+        'role': 'stalker',
+        'callsign': callsign,
+        'phone': phone_with_plus,
+        'phone_verified': 1,
+        'clearance_level': 1,
+        'last_lat': lat,
+        'last_lng': lng,
+        'last_seen': now_iso,
+        'created_at': now_iso,
+        'status': 'pending'
+    }
+
+    # Save to Supabase (persistent across Vercel invocations)
+    try:
+        SupabaseDB.create_user(user_payload)
+    except Exception as e:
+        print("[Supabase] create_user error:", e)
+
+    # Also record into local SQLite for fallback
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+        INSERT INTO users (username, email, password_hash, role, callsign, phone, phone_verified, clearance_level, last_lat, last_lng, last_seen, created_at, status)
+        VALUES (?, ?, ?, 'stalker', ?, ?, 1, 1, ?, ?, ?, ?, 'pending')
+        """, (username, email, pwd_hash, callsign, phone_with_plus, lat, lng, now_iso, now_iso))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
     return jsonify({
         'status': 'pending',
@@ -552,38 +612,48 @@ def login():
     if not username or not password:
         return jsonify({'error': 'Укажите позывной и код доступа'}), 400
 
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE username = ? OR email = ?", (username, username))
-    user = cursor.fetchone()
+    user = None
+    try:
+        user = SupabaseDB.get_user_by_username_or_email(username)
+    except Exception as e:
+        print("[Supabase] login get_user error:", e)
+
+    if not user:
+        # Fallback to local SQLite
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE username = ? OR email = ?", (username, username))
+        user_row = cursor.fetchone()
+        conn.close()
+        if user_row:
+            user = dict(user_row)
 
     if not user or not check_password_hash(user['password_hash'], password):
-        conn.close()
         return jsonify({'error': 'Неверный логин или пароль'}), 401
 
     # Check registration approval status
-    user_status = user['status'] if ('status' in user.keys() and user['status']) else 'approved'
+    user_status = user.get('status', 'approved')
     if user_status == 'pending':
-        conn.close()
         return jsonify({'error': 'Ваша заявка на регистрацию находится на рассмотрении администрации. Ожидайте подтверждения допуска.'}), 403
     if user_status == 'rejected':
-        conn.close()
         return jsonify({'error': 'Ваша заявка на регистрацию была отклонена администратором.'}), 403
 
     now_iso = datetime.datetime.now().isoformat()
-    if lat is not None and lng is not None:
-        cursor.execute("UPDATE users SET last_lat = ?, last_lng = ?, last_seen = ? WHERE id = ?", (lat, lng, now_iso, user['id']))
-    else:
-        cursor.execute("UPDATE users SET last_seen = ? WHERE id = ?", (now_iso, user['id']))
-    conn.commit()
-    conn.close()
+    try:
+        update_data = {'last_seen': now_iso}
+        if lat is not None and lng is not None:
+            update_data['last_lat'] = lat
+            update_data['last_lng'] = lng
+        SupabaseDB.update_user(user['id'], update_data)
+    except Exception as e:
+        print("[Supabase] login update_user error:", e)
 
     token = jwt.encode({
         'user_id': user['id'],
         'username': user['username'],
-        'role': user['role'],
-        'callsign': user['callsign'],
-        'clearance_level': user['clearance_level'],
+        'role': user.get('role', 'stalker'),
+        'callsign': user.get('callsign'),
+        'clearance_level': user.get('clearance_level', 1),
         'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
     }, SECRET_KEY, algorithm="HS256")
 
@@ -593,9 +663,9 @@ def login():
         'user': {
             'id': user['id'],
             'username': user['username'],
-            'role': user['role'],
-            'callsign': user['callsign'],
-            'clearance_level': user['clearance_level']
+            'role': user.get('role', 'stalker'),
+            'callsign': user.get('callsign'),
+            'clearance_level': user.get('clearance_level', 1)
         }
     })
 
@@ -614,12 +684,15 @@ def update_user_location(current_user):
     if lat is None or lng is None:
         return jsonify({'error': 'Координаты не указаны'}), 400
 
-    conn = get_db()
-    cursor = conn.cursor()
     now_iso = datetime.datetime.now().isoformat()
-    cursor.execute("UPDATE users SET last_lat = ?, last_lng = ?, last_seen = ? WHERE id = ?", (lat, lng, now_iso, current_user['user_id']))
-    conn.commit()
-    conn.close()
+    try:
+        SupabaseDB.update_user(current_user['user_id'], {
+            'last_lat': lat,
+            'last_lng': lng,
+            'last_seen': now_iso
+        })
+    except Exception as e:
+        print("[Supabase] location update error:", e)
 
     return jsonify({'status': 'ok'})
 
@@ -918,26 +991,42 @@ def get_admin_radar(current_user):
     if current_user.get('role') != 'admin':
         return jsonify({'error': 'Доступ запрещён'}), 403
 
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, username, email, role, callsign, phone, last_lat, last_lng, last_seen, created_at, status FROM users ORDER BY CASE WHEN status = 'pending' THEN 0 ELSE 1 END, id DESC")
-    rows = cursor.fetchall()
-    conn.close()
-
     users = []
-    for r in rows:
-        users.append({
-            'id': r['id'],
-            'username': r['username'],
-            'email': r['email'],
-            'role': r['role'],
-            'callsign': r['callsign'],
-            'phone': r['phone'] or 'Не указан',
-            'status': r['status'] if ('status' in r.keys() and r['status']) else 'approved',
-            'coords': [r['last_lat'], r['last_lng']] if (r['last_lat'] and r['last_lng']) else None,
-            'last_seen': r['last_seen'],
-            'created_at': r['created_at']
-        })
+    try:
+        raw_users = SupabaseDB.get_all_users_for_radar()
+        for r in raw_users:
+            users.append({
+                'id': r['id'],
+                'username': r.get('username'),
+                'email': r.get('email'),
+                'role': r.get('role', 'stalker'),
+                'callsign': r.get('callsign'),
+                'phone': r.get('phone') or 'Не указан',
+                'status': r.get('status', 'approved'),
+                'coords': [r['last_lat'], r['last_lng']] if (r.get('last_lat') is not None and r.get('last_lng') is not None) else None,
+                'last_seen': r.get('last_seen'),
+                'created_at': r.get('created_at')
+            })
+    except Exception as e:
+        print("[Supabase] get_admin_radar error:", e)
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username, email, role, callsign, phone, last_lat, last_lng, last_seen, created_at, status FROM users ORDER BY CASE WHEN status = 'pending' THEN 0 ELSE 1 END, id DESC")
+        rows = cursor.fetchall()
+        conn.close()
+        for r in rows:
+            users.append({
+                'id': r['id'],
+                'username': r['username'],
+                'email': r['email'],
+                'role': r['role'],
+                'callsign': r['callsign'],
+                'phone': r['phone'] or 'Не указан',
+                'status': r['status'] if ('status' in r.keys() and r['status']) else 'approved',
+                'coords': [r['last_lat'], r['last_lng']] if (r['last_lat'] and r['last_lng']) else None,
+                'last_seen': r['last_seen'],
+                'created_at': r['created_at']
+            })
 
     return jsonify(users)
 
@@ -950,6 +1039,11 @@ def approve_user(current_user, user_id):
 
     if current_user.get('role') != 'admin':
         return jsonify({'error': 'Требуются права Администратора'}), 403
+
+    try:
+        SupabaseDB.update_user(user_id, {'status': 'approved'})
+    except Exception as e:
+        print("[Supabase] approve_user error:", e)
 
     conn = get_db()
     cursor = conn.cursor()
@@ -969,6 +1063,11 @@ def reject_user(current_user, user_id):
     if current_user.get('role') != 'admin':
         return jsonify({'error': 'Требуются права Администратора'}), 403
 
+    try:
+        SupabaseDB.update_user(user_id, {'status': 'rejected'})
+    except Exception as e:
+        print("[Supabase] reject_user error:", e)
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET status = 'rejected' WHERE id = ?", (user_id,))
@@ -987,6 +1086,11 @@ def delete_user(current_user, user_id):
     if current_user.get('role') != 'admin':
         return jsonify({'error': 'Требуются права Администратора'}), 403
 
+    try:
+        SupabaseDB.delete_user(user_id)
+    except Exception as e:
+        print("[Supabase] delete_user error:", e)
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
@@ -1001,30 +1105,53 @@ def get_stats():
     if request.method == 'OPTIONS':
         return jsonify({'status': 'ok'}), 200
 
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM locations WHERE status = 'approved'")
-    approved_count = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM submissions WHERE status = 'pending'")
-    pending_count = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM submissions WHERE status = 'rejected'")
-    rejected_count = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM users")
-    users_count = cursor.fetchone()[0]
     try:
-        cursor.execute("SELECT COUNT(*) FROM users WHERE status = 'pending'")
-        pending_users = cursor.fetchone()[0]
-    except Exception:
-        pending_users = 0
-    conn.close()
+        stats = SupabaseDB.get_stats()
+        # Always count locations from SQLite if not populated in Supabase yet
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM locations WHERE status = 'approved'")
+        sqlite_locs = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM submissions WHERE status = 'pending'")
+        sqlite_pending_subs = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM submissions WHERE status = 'rejected'")
+        sqlite_rej_subs = cursor.fetchone()[0]
+        conn.close()
 
-    return jsonify({
-        'total_locations': approved_count,
-        'pending_submissions': pending_count,
-        'rejected_submissions': rejected_count,
-        'registered_stalkers': users_count,
-        'pending_users': pending_users
-    })
+        if stats.get('total_locations', 0) == 0:
+            stats['total_locations'] = sqlite_locs
+        if stats.get('pending_submissions', 0) == 0:
+            stats['pending_submissions'] = sqlite_pending_subs
+        if stats.get('rejected_submissions', 0) == 0:
+            stats['rejected_submissions'] = sqlite_rej_subs
+
+        return jsonify(stats)
+    except Exception as e:
+        print("[Supabase] get_stats error:", e)
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM locations WHERE status = 'approved'")
+        approved_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM submissions WHERE status = 'pending'")
+        pending_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM submissions WHERE status = 'rejected'")
+        rejected_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM users")
+        users_count = cursor.fetchone()[0]
+        try:
+            cursor.execute("SELECT COUNT(*) FROM users WHERE status = 'pending'")
+            pending_users = cursor.fetchone()[0]
+        except Exception:
+            pending_users = 0
+        conn.close()
+
+        return jsonify({
+            'total_locations': approved_count,
+            'pending_submissions': pending_count,
+            'rejected_submissions': rejected_count,
+            'registered_stalkers': users_count,
+            'pending_users': pending_users
+        })
 
 handler = app
 

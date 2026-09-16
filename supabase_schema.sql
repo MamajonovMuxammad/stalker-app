@@ -34,36 +34,51 @@ CREATE TABLE IF NOT EXISTS phone_verifications (
 );
 
 -- 3. Таблица утверждённых локаций (Locations)
-CREATE TABLE IF NOT EXISTS locations (
-    id BIGSERIAL PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    type VARCHAR(50) NOT NULL,
-    danger_level INTEGER DEFAULT 1,
+DROP TABLE IF EXISTS locations CASCADE;
+CREATE TABLE locations (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    icon TEXT DEFAULT 'bunker',
+    color TEXT DEFAULT '#2563EB',
+    region TEXT NOT NULL,
     lat DOUBLE PRECISION NOT NULL,
     lng DOUBLE PRECISION NOT NULL,
-    image_url TEXT,
-    status VARCHAR(50) DEFAULT 'approved',
-    submitted_by VARCHAR(100),
-    resolution TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    difficulty INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'approved',
+    description TEXT,
+    access TEXT,
+    inventory TEXT,
+    photos TEXT,
+    tags TEXT,
+    visits INTEGER DEFAULT 0,
+    bookmarks INTEGER DEFAULT 0,
+    date_added TEXT NOT NULL
 );
 
 -- 4. Таблица заявок на модерацию локаций (Submissions)
-CREATE TABLE IF NOT EXISTS submissions (
-    id BIGSERIAL PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
+DROP TABLE IF EXISTS submissions CASCADE;
+CREATE TABLE submissions (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    icon TEXT DEFAULT 'bunker',
+    color TEXT DEFAULT '#2563EB',
+    region TEXT NOT NULL,
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
+    difficulty INTEGER,
+    status TEXT NOT NULL DEFAULT 'pending',
+    author TEXT NOT NULL,
+    date TEXT NOT NULL,
     description TEXT,
-    type VARCHAR(50) NOT NULL,
-    danger_level INTEGER DEFAULT 1,
-    lat DOUBLE PRECISION NOT NULL,
-    lng DOUBLE PRECISION NOT NULL,
-    images TEXT, -- JSON строка со списком картинок
-    status VARCHAR(50) DEFAULT 'pending',
-    submitted_by VARCHAR(100),
-    resolution TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    access TEXT,
+    photos TEXT,
+    resolution TEXT
 );
+
+ALTER TABLE locations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE submissions DISABLE ROW LEVEL SECURITY;
 
 -- 5. Начальные аккаунты (Командир и Следопыт)
 -- Пароль по умолчанию для обоих: stalker1986
@@ -72,7 +87,7 @@ VALUES
 (
     'commander',
     'commander@zone.recon',
-    'scrypt:32768:8:1$K5zJv02TfO4XjL7G$2e4d0b115a3bb436d4dfbc34b6b66d8e20e8b2b73be5c6e8e8ea6f6630f55cf55a004eb7cbfb49e29a3a936a282b0e687895e6d6d8495a452ef3ff8c6cfd8fca',
+    'scrypt:32768:8:1$Tfw20i1aDOARXBjd$23ba9bd56d1d6957d347ef4e86c247fe056ea009c34a57c64dc35e8939fdc2103217e41483bb83d80fa20ab6747ced8611703425360fd1b40c0fcfa419f747cf',
     'admin',
     'КОМАНДОР-01',
     '+998900000001',
@@ -83,7 +98,7 @@ VALUES
 (
     'tracker_89',
     'tracker@zone.recon',
-    'scrypt:32768:8:1$K5zJv02TfO4XjL7G$2e4d0b115a3bb436d4dfbc34b6b66d8e20e8b2b73be5c6e8e8ea6f6630f55cf55a004eb7cbfb49e29a3a936a282b0e687895e6d6d8495a452ef3ff8c6cfd8fca',
+    'scrypt:32768:8:1$Tfw20i1aDOARXBjd$23ba9bd56d1d6957d347ef4e86c247fe056ea009c34a57c64dc35e8939fdc2103217e41483bb83d80fa20ab6747ced8611703425360fd1b40c0fcfa419f747cf',
     'stalker',
     'СЛЕДОПЫТ',
     '+998900000089',
