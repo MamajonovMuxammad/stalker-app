@@ -98,9 +98,12 @@ function toggleSidebar() {
   const sidebar = document.getElementById('map-sidebar');
   const page = document.getElementById('map-page');
   const backdrop = document.getElementById('sidebar-backdrop');
+  const toggleBtn = document.getElementById('sidebar-toggle-btn');
+  const toggleText = toggleBtn ? toggleBtn.querySelector('.sidebar-toggle-text') : null;
   if (!sidebar) return;
 
   const isMobile = window.innerWidth <= 768;
+  let isOpen;
   if (isMobile) {
     const willOpen = !sidebar.classList.contains('mobile-open');
     if (willOpen) {
@@ -108,22 +111,30 @@ function toggleSidebar() {
       sidebar.classList.remove('collapsed');
       if (page) page.classList.add('sidebar-open');
       if (backdrop) backdrop.classList.add('active');
+      isOpen = true;
     } else {
       sidebar.classList.remove('mobile-open');
       sidebar.classList.add('collapsed');
       if (page) page.classList.remove('sidebar-open');
       if (backdrop) backdrop.classList.remove('active');
+      isOpen = false;
     }
   } else {
     const isCollapsed = sidebar.classList.contains('collapsed');
     if (isCollapsed) {
       sidebar.classList.remove('collapsed');
       if (page) page.classList.add('sidebar-open');
+      isOpen = true;
     } else {
       sidebar.classList.add('collapsed');
       if (page) page.classList.remove('sidebar-open');
+      isOpen = false;
     }
   }
+
+  // Toggle button appearance
+  if (toggleBtn) toggleBtn.classList.toggle('open', isOpen);
+  if (toggleText) toggleText.textContent = isOpen ? 'Скрыть' : 'Объекты';
 
   setTimeout(() => {
     if (typeof map !== 'undefined' && map) {
