@@ -53,6 +53,23 @@ class SupabaseDB:
         return res[0] if res else None
 
     @classmethod
+    def get_user_by_phone(cls, phone_val):
+        if not phone_val:
+            return None
+        import re
+        digits = re.sub(r'\D', '', str(phone_val))
+        if not digits:
+            return None
+        if len(digits) >= 9:
+            sub = urllib.parse.quote(digits[-9:])
+            res = cls.request('GET', 'users', {'phone': f'ilike.*{sub}*', 'select': '*'})
+            return res[0] if res else None
+        else:
+            safe_p = urllib.parse.quote(phone_val)
+            res = cls.request('GET', 'users', {'phone': f'eq.{safe_p}', 'select': '*'})
+            return res[0] if res else None
+
+    @classmethod
     def get_user_by_id(cls, user_id):
         res = cls.request('GET', 'users', {'id': f'eq.{user_id}', 'select': '*'})
         return res[0] if res else None

@@ -493,6 +493,14 @@ def send_tg_code():
 
     phone_no_plus = phone_with_plus.replace('+', '')
 
+    # Check if a user is already registered with this phone number
+    try:
+        existing_phone_user = SupabaseDB.get_user_by_phone(phone_with_plus)
+        if existing_phone_user:
+            return jsonify({'error': 'К данному номеру телефона уже привязан аккаунт. Регистрация более одного пользователя на один номер запрещена. Пожалуйста, выполните вход.'}), 400
+    except Exception as e:
+        print("[Supabase] send_tg_code check phone error:", e)
+
     code = f"{random.randint(100000, 999999)}"
     now = datetime.datetime.now().isoformat()
 
@@ -574,7 +582,42 @@ def register():
 
     phone_no_plus = phone_with_plus.replace('+', '')
 
-    # 1. Verify phone code via Supabase
+    # 1. Check duplicate username, email, or phone in Supabase
+    existing = None
+    try:
+        existing = SupabaseDB.get_user_by_username_or_email(username)
+        if not existing:
+            existing = SupabaseDB.get_user_by_username_or_email(email)
+        if not existing:
+            existing = SupabaseDB.get_user_by_phone(phone_with_plus)
+    except Exception as e:
+        print("[Supabase] duplicate check error:", e)
+
+    if existing:
+        if existing.get('username') == username:
+            return jsonify({'error': 'Исследователь с таким логином уже зарегистрирован'}), 400
+        if existing.get('email') == email:
+            return jsonify({'error': 'Пользователь с таким email уже зарегистрирован'}), 400
+        return jsonify({'error': 'К данному номеру телефона уже привязан аккаунт. Регистрация более одного пользователя на один номер запрещена.'}), 400
+
+    # Also check local SQLite fallback for duplicates
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username, email, phone FROM users WHERE username = ? OR email = ? OR phone = ? OR phone LIKE ?",
+                       (username, email, phone_with_plus, f"%{phone_no_plus[-9:]}%"))
+        sql_existing = cursor.fetchone()
+        conn.close()
+        if sql_existing:
+            if sql_existing['username'] == username:
+                return jsonify({'error': 'Исследователь с таким логином уже зарегистрирован'}), 400
+            if sql_existing['email'] == email:
+                return jsonify({'error': 'Пользователь с таким email уже зарегистрирован'}), 400
+            return jsonify({'error': 'К данному номеру телефона уже привязан аккаунт. Регистрация более одного пользователя на один номер запрещена.'}), 400
+    except Exception:
+        pass
+
+    # 2. Verify phone code via Supabase
     tg_code = None
     try:
         tg_code = SupabaseDB.get_latest_phone_code(phone_with_plus, phone_no_plus)
@@ -590,18 +633,6 @@ def register():
         conn.close()
         if not ver or ver['code'] != code:
             return jsonify({'error': 'Неверный 6-значный код подтверждения из Telegram бота'}), 400
-
-    # 2. Check duplicate username or email in Supabase
-    existing = None
-    try:
-        existing = SupabaseDB.get_user_by_username_or_email(username)
-        if not existing:
-            existing = SupabaseDB.get_user_by_username_or_email(email)
-    except Exception as e:
-        print("[Supabase] duplicate check error:", e)
-
-    if existing:
-        return jsonify({'error': 'Исследователь с таким логином или email уже зарегистрирован'}), 400
 
     now_iso = datetime.datetime.now().isoformat()
     pwd_hash = generate_password_hash(password)
