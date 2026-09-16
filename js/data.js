@@ -254,3 +254,23 @@ if (document.readyState === 'loading') {
 } else {
   initGlobalNav();
 }
+
+/* ── Auth Guard ──────────────────────────────────────────── */
+(function authGuard() {
+  // Pages that require authentication
+  const PROTECTED_PATHS = ['/', '/index.html', '/catalog.html', '/submit.html', '/admin.html', '/location.html'];
+
+  const pathname = window.location.pathname;
+  // Normalize: /index.html and / are the same
+  const isProtected = PROTECTED_PATHS.some(p => pathname === p || pathname.startsWith(p + '?'));
+
+  if (isProtected && !Auth.isLoggedIn()) {
+    // Redirect to auth, preserving intended destination
+    window.location.replace('/auth.html');
+  }
+
+  // Admin-only guard for admin.html
+  if ((pathname === '/admin.html') && Auth.isLoggedIn() && !Auth.isAdmin()) {
+    window.location.replace('/');
+  }
+})();

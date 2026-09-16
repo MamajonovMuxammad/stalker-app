@@ -338,6 +338,12 @@ async function handleAuthSubmit(e) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // If user is already logged in, send them to the map
+  if (typeof Auth !== 'undefined' && Auth.isLoggedIn()) {
+    window.location.replace('/');
+    return;
+  }
+
   generateCaptcha();
 
   const canvas = document.getElementById('captcha-canvas');
