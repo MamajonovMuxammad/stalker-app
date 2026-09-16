@@ -128,6 +128,7 @@ const Toast = {
 
   success(msg) { this.show(msg, 'success'); },
   error(msg)   { this.show(msg, 'error'); },
+  warning(msg) { this.show(msg, 'warning'); },
   info(msg)    { this.show(msg, 'info'); },
 };
 

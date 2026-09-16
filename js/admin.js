@@ -49,6 +49,18 @@ async function loadStats() {
     if (el('stat-pending-subs'))  el('stat-pending-subs').textContent  = stats.pending_submissions  || 0;
     if (el('stat-pending-users')) el('stat-pending-users').textContent = stats.pending_users        || 0;
     if (el('stat-users-count'))   el('stat-users-count').textContent   = stats.registered_stalkers  || 0;
+
+    // Sidebar counts
+    if (el('count-users')) el('count-users').textContent = stats.registered_stalkers || 0;
+    const pendingUsersBadge = el('count-pending-users-badge');
+    if (pendingUsersBadge) {
+      if (stats.pending_users > 0) {
+        pendingUsersBadge.style.display = 'inline-block';
+        pendingUsersBadge.textContent = `+${stats.pending_users}`;
+      } else {
+        pendingUsersBadge.style.display = 'none';
+      }
+    }
   } catch (e) {
     console.warn('Stats load error', e);
   }
@@ -371,29 +383,45 @@ function renderUsersTable(query = '') {
     }
 
     let actionsHtml = '';
+    const currentUser = Auth.getUser();
+    const isSelf = currentUser && (u.username === currentUser.username);
+    const isAdmin = u.role === 'admin';
+
     if (status === 'pending') {
       actionsHtml = `
-        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
           <button class="btn btn-sm" onclick="approveUserRegistration(${u.id})" style="background:var(--success-dim); color:var(--success); border:1px solid var(--success); padding:4px 10px; font-size:11px; font-weight:700;">
             ✓ Одобрить
           </button>
-          <button class="btn btn-sm btn-danger" onclick="rejectUserRegistration(${u.id})" style="padding:4px 10px; font-size:11px;">
+          <button class="btn btn-sm btn-ghost" onclick="rejectUserRegistration(${u.id})" style="padding:4px 8px; font-size:11px; color:var(--warning);" title="Отклонить допуск">
             ✕ Отклонить
           </button>
+          ${!isAdmin && !isSelf ? `
+          <button class="btn btn-sm btn-danger" onclick="deleteUserRegistration(${u.id}, '${u.username}')" style="padding:4px 8px; font-size:11px;" title="Удалить из базы навсегда">
+            🗑️ Удалить
+          </button>` : ''}
         </div>
       `;
     } else if (status === 'approved') {
       actionsHtml = `
         <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
           ${u.coords ? `<button class="btn btn-secondary btn-sm" onclick="showUserOnRadar(${u.coords[0]}, ${u.coords[1]})" style="white-space:nowrap; padding:3px 8px; font-size:11px;">🎯 Радар</button>` : ''}
-          ${u.role !== 'admin' ? `<button class="btn btn-ghost btn-sm" onclick="rejectUserRegistration(${u.id})" style="padding:3px 6px; font-size:11px; color:var(--danger);" title="Отозвать допуск">Отозвать</button>` : ''}
+          ${!isAdmin && !isSelf ? `
+          <button class="btn btn-ghost btn-sm" onclick="rejectUserRegistration(${u.id})" style="padding:3px 6px; font-size:11px; color:var(--warning);" title="Отозвать допуск">Отозвать</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteUserRegistration(${u.id}, '${u.username}')" style="padding:3px 8px; font-size:11px;" title="Удалить из базы навсегда">🗑️ Удалить</button>` : ''}
         </div>
       `;
     } else {
       actionsHtml = `
-        <button class="btn btn-secondary btn-sm" onclick="approveUserRegistration(${u.id})" style="padding:4px 10px; font-size:11px;">
-          Восстановить
-        </button>
+        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="approveUserRegistration(${u.id})" style="padding:4px 10px; font-size:11px;">
+            Восстановить
+          </button>
+          ${!isAdmin && !isSelf ? `
+          <button class="btn btn-sm btn-danger" onclick="deleteUserRegistration(${u.id}, '${u.username}')" style="padding:4px 8px; font-size:11px;" title="Удалить из базы навсегда">
+            🗑️ Удалить
+          </button>` : ''}
+        </div>
       `;
     }
 
@@ -446,6 +474,19 @@ async function rejectUserRegistration(userId) {
     await loadStats();
   } catch (e) {
     Toast.error(e.message || 'Ошибка при отклонении');
+  }
+}
+
+async function deleteUserRegistration(userId, username) {
+  if (!confirm(`Вы действительно хотите БЕЗВОЗВРАТНО удалить пользователя @${username || userId} из базы данных?`)) return;
+  try {
+    await API.del(`/admin/users/${userId}`);
+    Toast.success(`Пользователь @${username || userId} удалён`);
+    await loadRadar();
+    await loadUsersTable();
+    await loadStats();
+  } catch (e) {
+    Toast.error(e.message || 'Ошибка при удалении пользователя');
   }
 }
 

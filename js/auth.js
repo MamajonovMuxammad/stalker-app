@@ -90,8 +90,44 @@ function clearErrors() {
     el.textContent = '';
     el.style.display = 'none';
   });
+  const globalErr = document.getElementById('auth-global-error');
+  if (globalErr) {
+    globalErr.textContent = '';
+    globalErr.style.display = 'none';
+  }
   document.querySelectorAll('.input, .field-input').forEach(el => el.classList.remove('error'));
 }
+
+window.showPendingScreen = function(username) {
+  const form = document.getElementById('auth-form');
+  const tabsWrap = document.getElementById('auth-tabs-wrapper');
+  const title = document.getElementById('auth-title');
+  const desc = document.getElementById('auth-desc');
+  const pendingScreen = document.getElementById('auth-pending-screen');
+  const userDisplay = document.getElementById('pending-username-display');
+
+  if (form) form.style.display = 'none';
+  if (tabsWrap) tabsWrap.style.display = 'none';
+  if (title) title.style.display = 'none';
+  if (desc) desc.style.display = 'none';
+  if (userDisplay) userDisplay.textContent = '@' + username;
+  if (pendingScreen) pendingScreen.style.display = 'block';
+};
+
+window.showLoginFormAfterPending = function() {
+  const form = document.getElementById('auth-form');
+  const tabsWrap = document.getElementById('auth-tabs-wrapper');
+  const title = document.getElementById('auth-title');
+  const desc = document.getElementById('auth-desc');
+  const pendingScreen = document.getElementById('auth-pending-screen');
+
+  if (pendingScreen) pendingScreen.style.display = 'none';
+  if (tabsWrap) tabsWrap.style.display = 'block';
+  if (title) title.style.display = 'block';
+  if (desc) desc.style.display = 'block';
+  if (form) form.style.display = 'block';
+  if (window.switchMode) window.switchMode('login');
+};
 
 function setError(fieldId, errorMsg) {
   const input = document.getElementById(fieldId);
@@ -274,16 +310,7 @@ async function handleAuthSubmit(e) {
     if (isRegisterMode) {
       const res = await Auth.register(username, password, email, callsign, phone, tgCode, lat, lng);
       if (res && res.status === 'pending') {
-        const pendingModal = document.getElementById('pending-modal');
-        if (pendingModal) {
-          pendingModal.style.display = 'flex';
-        } else {
-          Toast.info('Ваша заявка на регистрацию принята и находится на рассмотрении администрации.');
-        }
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Заявка отправлена';
-        }
+        showPendingScreen(username);
         return;
       }
       Toast.success('Регистрация успешна! Допуск оформлен.');
@@ -294,7 +321,14 @@ async function handleAuthSubmit(e) {
       setTimeout(() => { window.location.href = '/'; }, 700);
     }
   } catch (err) {
-    Toast.error(err.message || 'Ошибка авторизации. Проверьте данные');
+    const errorMsg = err.message || 'Ошибка авторизации. Проверьте введенные данные';
+    Toast.error(errorMsg);
+    const globalErr = document.getElementById('auth-global-error');
+    if (globalErr) {
+      globalErr.textContent = errorMsg;
+      globalErr.style.display = 'block';
+      globalErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
     generateCaptcha();
     if (submitBtn) {
       submitBtn.disabled = false;

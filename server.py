@@ -532,6 +532,19 @@ def register():
     user_id = cursor.lastrowid
     conn.close()
 
+    # Proactively notify Telegram administrators about new registration
+    for cid in KNOWN_CHATS:
+        send_telegram_message(
+            cid,
+            f"👤 <b>НОВАЯ ЗАЯВКА НА РЕГИСТРАЦИЮ</b>\n\n"
+            f"• Позывной: <b>{callsign}</b>\n"
+            f"• Логин: @{username}\n"
+            f"• Телефон: <code>{phone}</code>\n"
+            f"• Email: {email}\n"
+            f"• Статус: ⏳ <b>На рассмотрении</b>\n\n"
+            f"Одобрите в админ-панели (Реестр сталкеров): https://stalker-app.vercel.app/admin.html"
+        )
+
     return jsonify({
         'status': 'pending',
         'message': 'Ваша заявка на регистрацию принята и находится на рассмотрении администрации базы STALKER. После одобрения вы сможете войти в систему под своим логином.'
@@ -920,7 +933,7 @@ def get_admin_radar(current_user):
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, email, role, callsign, phone, last_lat, last_lng, last_seen, created_at, status FROM users")
+    cursor.execute("SELECT id, username, email, role, callsign, phone, last_lat, last_lng, last_seen, created_at, status FROM users ORDER BY CASE WHEN status = 'pending' THEN 0 ELSE 1 END, id DESC")
     rows = cursor.fetchall()
     conn.close()
 
