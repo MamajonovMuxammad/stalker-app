@@ -4,6 +4,7 @@ import datetime
 import uuid
 import jwt
 import random
+import shutil
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -12,8 +13,23 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 SECRET_KEY = "stalker-expedition-dossier-secret-key-1986"
-DB_PATH = os.path.join(os.path.dirname(__file__), "stalker.db")
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "uploads")
+
+# Vercel Serverless environment handling (/tmp is writable)
+IS_VERCEL = os.environ.get('VERCEL') == '1' or 'VERCEL_ENV' in os.environ
+
+if IS_VERCEL:
+    DB_PATH = "/tmp/stalker.db"
+    UPLOAD_FOLDER = "/tmp/uploads"
+    local_db = os.path.join(os.path.dirname(__file__), "stalker.db")
+    if os.path.exists(local_db) and not os.path.exists(DB_PATH):
+        try:
+            shutil.copyfile(local_db, DB_PATH)
+        except Exception as e:
+            print("DB copy error:", e)
+else:
+    DB_PATH = os.path.join(os.path.dirname(__file__), "stalker.db")
+    UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "uploads")
+
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
 
@@ -147,6 +163,12 @@ def init_db():
     conn.commit()
     conn.close()
 
+# Initialize DB on load
+try:
+    init_db()
+except Exception as err:
+    print("Database init warning:", err)
+
 # Auth Decorator
 def token_required(f):
     @wraps(f)
@@ -175,6 +197,7 @@ def serve_upload(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
 @app.route('/api/upload', methods=['POST'])
+@app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files and 'files' not in request.files:
         return jsonify({'error': 'Файлы для загрузки не найдены'}), 400
@@ -206,13 +229,13 @@ def upload_file():
 # ── Telegram Phone Verification ─────────────────────────────────────────
 
 @app.route('/api/auth/send-tg-code', methods=['POST'])
+@app.route('/auth/send-tg-code', methods=['POST'])
 def send_tg_code():
     data = request.get_json() or {}
     phone = data.get('phone', '').strip().replace(' ', '').replace('-', '')
     if not phone or len(phone) < 7:
         return jsonify({'error': 'Укажите корректный номер телефона в международном формате (+998...)'}), 400
 
-    # Generate 6-digit code
     code = f"{random.randint(100000, 999999)}"
     now = datetime.datetime.now().isoformat()
 
@@ -230,12 +253,13 @@ def send_tg_code():
 
     return jsonify({
         'message': 'Код верификации сгенерирован',
-        'code': code, # provided for verification / testing
+        'code': code,
         'bot_url': bot_url,
         'phone': phone
     })
 
 @app.route('/api/auth/register', methods=['POST'])
+@app.route('/auth/register', methods=['POST'])
 def register():
     data = request.get_json() or {}
     username = data.get('username', '').strip()
@@ -301,6 +325,7 @@ def register():
     }), 201
 
 @app.route('/api/auth/login', methods=['POST'])
+@app.route('/auth/login', methods=['POST'])
 def login():
     data = request.get_json() or {}
     username = data.get('username', '').strip()
@@ -320,7 +345,6 @@ def login():
         conn.close()
         return jsonify({'error': 'Неверный позывной или код доступа'}), 401
 
-    # Update geolocation if provided
     now_iso = datetime.datetime.now().isoformat()
     if lat is not None and lng is not None:
         cursor.execute("UPDATE users SET last_lat = ?, last_lng = ?, last_seen = ? WHERE id = ?", (lat, lng, now_iso, user['id']))
@@ -353,6 +377,7 @@ def login():
 # ── User Geolocation Update ─────────────────────────────────────────────
 
 @app.route('/api/user/location', methods=['POST'])
+@app.route('/user/location', methods=['POST'])
 @token_required
 def update_user_location(current_user):
     data = request.get_json() or {}
@@ -373,6 +398,7 @@ def update_user_location(current_user):
 # ── Locations Routes ────────────────────────────────────────────────────
 
 @app.route('/api/locations', methods=['GET'])
+@app.route('/locations', methods=['GET'])
 def get_locations():
     conn = get_db()
     cursor = conn.cursor()
@@ -424,6 +450,7 @@ def get_locations():
     return jsonify(result)
 
 @app.route('/api/locations/<loc_id>', methods=['GET'])
+@app.route('/locations/<loc_id>', methods=['GET'])
 def get_location(loc_id):
     conn = get_db()
     cursor = conn.cursor()
@@ -457,6 +484,7 @@ def get_location(loc_id):
 # ── Admin Location Edit & Delete ────────────────────────────────────────
 
 @app.route('/api/admin/locations/<loc_id>', methods=['PUT'])
+@app.route('/admin/locations/<loc_id>', methods=['PUT'])
 @token_required
 def update_location(current_user, loc_id):
     if current_user.get('role') != 'admin':
@@ -493,6 +521,7 @@ def update_location(current_user, loc_id):
     return jsonify({'message': 'Объект успешно обновлён'})
 
 @app.route('/api/admin/locations/<loc_id>', methods=['DELETE'])
+@app.route('/admin/locations/<loc_id>', methods=['DELETE'])
 @token_required
 def delete_location(current_user, loc_id):
     if current_user.get('role') != 'admin':
@@ -509,6 +538,7 @@ def delete_location(current_user, loc_id):
 # ── Submissions Routes ──────────────────────────────────────────────────
 
 @app.route('/api/submissions', methods=['GET'])
+@app.route('/submissions', methods=['GET'])
 def get_submissions():
     status = request.args.get('status', 'all')
     conn = get_db()
@@ -543,6 +573,7 @@ def get_submissions():
     return jsonify(result)
 
 @app.route('/api/submissions', methods=['POST'])
+@app.route('/submissions', methods=['POST'])
 @token_required
 def create_submission(current_user):
     data = request.get_json() or {}
@@ -579,6 +610,7 @@ def create_submission(current_user):
 # ── Admin Moderation & Stats ────────────────────────────────────────────
 
 @app.route('/api/admin/submissions/<sub_id>/approve', methods=['POST'])
+@app.route('/admin/submissions/<sub_id>/approve', methods=['POST'])
 @token_required
 def approve_submission(current_user, sub_id):
     if current_user.get('role') != 'admin':
@@ -612,6 +644,7 @@ def approve_submission(current_user, sub_id):
     return jsonify({'message': 'Место одобрено', 'location_id': loc_id})
 
 @app.route('/api/admin/submissions/<sub_id>/reject', methods=['POST'])
+@app.route('/admin/submissions/<sub_id>/reject', methods=['POST'])
 @token_required
 def reject_submission(current_user, sub_id):
     if current_user.get('role') != 'admin':
@@ -631,6 +664,7 @@ def reject_submission(current_user, sub_id):
     return jsonify({'message': 'Заявка отклонена'})
 
 @app.route('/api/admin/radar', methods=['GET'])
+@app.route('/admin/radar', methods=['GET'])
 @token_required
 def get_admin_radar(current_user):
     if current_user.get('role') != 'admin':
@@ -650,7 +684,7 @@ def get_admin_radar(current_user):
             'email': r['email'],
             'role': r['role'],
             'callsign': r['callsign'],
-            'phone': r['phone'] or 'Не указан', # visible only to Admin
+            'phone': r['phone'] or 'Не указан',
             'coords': [r['last_lat'], r['last_lng']] if (r['last_lat'] and r['last_lng']) else None,
             'last_seen': r['last_seen'],
             'created_at': r['created_at']
@@ -659,6 +693,7 @@ def get_admin_radar(current_user):
     return jsonify(users)
 
 @app.route('/api/admin/stats', methods=['GET'])
+@app.route('/admin/stats', methods=['GET'])
 def get_stats():
     conn = get_db()
     cursor = conn.cursor()
@@ -680,7 +715,6 @@ def get_stats():
     })
 
 if __name__ == '__main__':
-    init_db()
     print("=== STALKER Backend initialized ===")
     print("Commander login: commander / stalker1986")
     print("Stalker login: tracker_89 / stalker1986")

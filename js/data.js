@@ -29,8 +29,19 @@ const API = {
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetch(this.baseUrl + path, { ...options, headers });
-    const data = await res.json();
+    const url = path.startsWith('/api') ? path : (this.baseUrl + path);
+    const res = await fetch(url, { ...options, headers });
+    
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      if (!res.ok) {
+        throw new Error(`Ошибка сервера (${res.status}). Попробуйте позже.`);
+      }
+      throw new Error('Некорректный ответ сервера');
+    }
+
     if (!res.ok) throw new Error(data.error || 'Ошибка сервера');
     return data;
   },
