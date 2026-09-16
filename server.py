@@ -226,6 +226,15 @@ def init_db():
         VALUES ('tracker_89', 'tracker@zone.recon', ?, 'stalker', 'СЛЕДОПЫТ', '+998939876543', 1, 3, ?)
         """, (pwd, datetime.datetime.now().isoformat()))
 
+    # Seed Test Stalker User
+    cursor.execute("SELECT * FROM users WHERE username = 'stalker_test'")
+    if not cursor.fetchone():
+        pwd = generate_password_hash("Stalker2026!")
+        cursor.execute("""
+        INSERT INTO users (username, email, password_hash, role, callsign, phone, phone_verified, clearance_level, status, created_at)
+        VALUES ('stalker_test', 'test@zone.recon', ?, 'stalker', 'ТЕСТ-СТАЛКЕР', '+998901112233', 1, 2, 'approved', ?)
+        """, (pwd, datetime.datetime.now().isoformat()))
+
     conn.commit()
     conn.close()
 
