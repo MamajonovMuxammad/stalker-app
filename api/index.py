@@ -208,6 +208,15 @@ def init_db():
         VALUES ('commander', 'commander@zone.recon', ?, 'admin', 'КОМАНДОР-01', '+998901234567', 1, 5, ?)
         """, (pwd, datetime.datetime.now().isoformat()))
 
+    # Seed Admin 2 User if not exists
+    cursor.execute("SELECT * FROM users WHERE username = 'commander2'")
+    if not cursor.fetchone():
+        pwd2 = generate_password_hash("Muxammad2008!")
+        cursor.execute("""
+        INSERT INTO users (username, email, password_hash, role, callsign, phone, phone_verified, clearance_level, created_at)
+        VALUES ('commander2', 'commander2@zone.recon', ?, 'admin', 'КОМАНДОР-02', '+998900000002', 1, 5, ?)
+        """, (pwd2, datetime.datetime.now().isoformat()))
+
     # Seed Stalker User
     cursor.execute("SELECT * FROM users WHERE username = 'tracker_89'")
     if not cursor.fetchone():
@@ -641,9 +650,12 @@ def login():
     now_iso = datetime.datetime.now().isoformat()
     try:
         update_data = {'last_seen': now_iso}
-        if lat is not None and lng is not None:
+        if user.get('role') != 'admin' and lat is not None and lng is not None:
             update_data['last_lat'] = lat
             update_data['last_lng'] = lng
+        elif user.get('role') == 'admin':
+            update_data['last_lat'] = None
+            update_data['last_lng'] = None
         SupabaseDB.update_user(user['id'], update_data)
     except Exception as e:
         print("[Supabase] login update_user error:", e)
@@ -677,6 +689,10 @@ def login():
 def update_user_location(current_user):
     if request.method == 'OPTIONS':
         return jsonify({'status': 'ok'}), 200
+
+    if current_user.get('role') == 'admin':
+        # Admin locations are classified and hidden from radar
+        return jsonify({'status': 'ok', 'note': 'admin_location_masked'})
 
     data = request.get_json() or {}
     lat = data.get('lat')
@@ -995,6 +1011,7 @@ def get_admin_radar(current_user):
     try:
         raw_users = SupabaseDB.get_all_users_for_radar()
         for r in raw_users:
+            is_adm = r.get('role') == 'admin'
             users.append({
                 'id': r['id'],
                 'username': r.get('username'),
@@ -1003,7 +1020,7 @@ def get_admin_radar(current_user):
                 'callsign': r.get('callsign'),
                 'phone': r.get('phone') or 'Не указан',
                 'status': r.get('status', 'approved'),
-                'coords': [r['last_lat'], r['last_lng']] if (r.get('last_lat') is not None and r.get('last_lng') is not None) else None,
+                'coords': None if is_adm else ([r['last_lat'], r['last_lng']] if (r.get('last_lat') is not None and r.get('last_lng') is not None) else None),
                 'last_seen': r.get('last_seen'),
                 'created_at': r.get('created_at')
             })
@@ -1015,6 +1032,7 @@ def get_admin_radar(current_user):
         rows = cursor.fetchall()
         conn.close()
         for r in rows:
+            is_adm = r['role'] == 'admin'
             users.append({
                 'id': r['id'],
                 'username': r['username'],
@@ -1023,7 +1041,7 @@ def get_admin_radar(current_user):
                 'callsign': r['callsign'],
                 'phone': r['phone'] or 'Не указан',
                 'status': r['status'] if ('status' in r.keys() and r['status']) else 'approved',
-                'coords': [r['last_lat'], r['last_lng']] if (r['last_lat'] and r['last_lng']) else None,
+                'coords': None if is_adm else ([r['last_lat'], r['last_lng']] if (r['last_lat'] and r['last_lng']) else None),
                 'last_seen': r['last_seen'],
                 'created_at': r['created_at']
             })

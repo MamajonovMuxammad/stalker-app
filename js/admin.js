@@ -239,6 +239,9 @@ function initRadarMap(focusCoords = null) {
   radarMarkersLayer.clearLayers();
 
   allRadarUsers.forEach(u => {
+    // Admins' locations are strictly confidential and masked from radar
+    if (u.role === 'admin') return;
+
     if (u.coords && u.coords[0] && u.coords[1]) {
       const lat = u.coords[0];
       const lng = u.coords[1];
@@ -364,11 +367,14 @@ function renderUsersTable(query = '') {
   }
 
   tbody.innerHTML = filtered.map(u => {
-    const coordsStr = u.coords
-      ? `${u.coords[0].toFixed(4)}, ${u.coords[1].toFixed(4)}`
-      : '<span style="color:var(--text-tertiary); font-style:italic;">Не зафиксированы</span>';
+    const isAdmin = u.role === 'admin';
+    const coordsStr = isAdmin
+      ? '<span style="color:var(--text-tertiary); font-style:italic;">Засекречено (СБ)</span>'
+      : (u.coords
+          ? `${u.coords[0].toFixed(4)}, ${u.coords[1].toFixed(4)}`
+          : '<span style="color:var(--text-tertiary); font-style:italic;">Не зафиксированы</span>');
 
-    const roleBadge = u.role === 'admin'
+    const roleBadge = isAdmin
       ? `<span class="badge" style="border-color:var(--accent); color:var(--accent);">Админ</span>`
       : `<span class="badge">Следопыт</span>`;
 
@@ -385,7 +391,6 @@ function renderUsersTable(query = '') {
     let actionsHtml = '';
     const currentUser = Auth.getUser();
     const isSelf = currentUser && (u.username === currentUser.username);
-    const isAdmin = u.role === 'admin';
 
     if (status === 'pending') {
       actionsHtml = `
@@ -405,7 +410,7 @@ function renderUsersTable(query = '') {
     } else if (status === 'approved') {
       actionsHtml = `
         <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-          ${u.coords ? `<button class="btn btn-secondary btn-sm" onclick="showUserOnRadar(${u.coords[0]}, ${u.coords[1]})" style="white-space:nowrap; padding:3px 8px; font-size:11px;">🎯 Радар</button>` : ''}
+          ${!isAdmin && u.coords ? `<button class="btn btn-secondary btn-sm" onclick="showUserOnRadar(${u.coords[0]}, ${u.coords[1]})" style="white-space:nowrap; padding:3px 8px; font-size:11px;">🎯 Радар</button>` : ''}
           ${!isAdmin && !isSelf ? `
           <button class="btn btn-ghost btn-sm" onclick="rejectUserRegistration(${u.id})" style="padding:3px 6px; font-size:11px; color:var(--warning);" title="Отозвать допуск">Отозвать</button>
           <button class="btn btn-sm btn-danger" onclick="deleteUserRegistration(${u.id}, '${u.username}')" style="padding:3px 8px; font-size:11px;" title="Удалить из базы навсегда">🗑️ Удалить</button>` : ''}

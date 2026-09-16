@@ -76,7 +76,7 @@ const Auth = {
   },
 
   async syncLocation() {
-    if (!this.isLoggedIn()) return;
+    if (!this.isLoggedIn() || this.isAdmin()) return;
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
