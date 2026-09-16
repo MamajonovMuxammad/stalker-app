@@ -532,19 +532,6 @@ def register():
     user_id = cursor.lastrowid
     conn.close()
 
-    # Proactively notify Telegram administrators about new registration
-    for cid in KNOWN_CHATS:
-        send_telegram_message(
-            cid,
-            f"👤 <b>НОВАЯ ЗАЯВКА НА РЕГИСТРАЦИЮ</b>\n\n"
-            f"• Позывной: <b>{callsign}</b>\n"
-            f"• Логин: @{username}\n"
-            f"• Телефон: <code>{phone}</code>\n"
-            f"• Email: {email}\n"
-            f"• Статус: ⏳ <b>На рассмотрении</b>\n\n"
-            f"Одобрите в админ-панели (Реестр сталкеров): https://stalker-app.vercel.app/admin.html"
-        )
-
     return jsonify({
         'status': 'pending',
         'message': 'Ваша заявка на регистрацию принята и находится на рассмотрении администрации базы STALKER. После одобрения вы сможете войти в систему под своим логином.'
