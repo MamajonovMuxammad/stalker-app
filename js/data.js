@@ -275,15 +275,67 @@ if (document.readyState === 'loading') {
   }
 })();
 
-/* ── Location Guard (Minimalist Geolocation Handler) ──────── */
+/* ── Location Guard (Strict Geolocation Manager & Watcher) ─── */
 const LocationGuard = {
   coords: null,
   isVerified: false,
+  isAdminBypassed: false,
+  watchId: null,
+  heartbeatTimer: null,
+  permissionObserverSet: false,
 
-  check() {
+  init() {
     if (!('geolocation' in navigator)) {
       this.showBlocker('Ваш браузер или устройство не поддерживает геолокацию.');
       return;
+    }
+
+    this.setupPermissionObserver();
+
+    // Check permission state via Permissions API if available
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then((permStatus) => {
+        if (permStatus.state === 'granted') {
+          this.startTracking();
+        } else {
+          // If prompt or denied: immediately show card and trigger permission request
+          this.showBlocker();
+          this.requestPosition(false);
+        }
+      }).catch(() => {
+        this.showBlocker();
+        this.requestPosition(false);
+      });
+    } else {
+      this.showBlocker();
+      this.requestPosition(false);
+    }
+  },
+
+  setupPermissionObserver() {
+    if (this.permissionObserverSet || !navigator.permissions || !navigator.permissions.query) return;
+    this.permissionObserverSet = true;
+
+    navigator.permissions.query({ name: 'geolocation' }).then((permStatus) => {
+      permStatus.onchange = () => {
+        if (permStatus.state === 'granted') {
+          this.requestPosition(false);
+        } else {
+          // User artificially revoked permission in browser settings
+          this.coords = null;
+          this.isVerified = false;
+          this.stopTracking();
+          this.showBlocker('Разрешение на геопозицию было отозвано в браузере. Включите доступ для продолжения.');
+        }
+      };
+    }).catch(() => {});
+  },
+
+  requestPosition(isInteractive = true) {
+    const reqBtn = document.getElementById('btn-location-guard-request');
+    if (reqBtn && isInteractive) {
+      reqBtn.disabled = true;
+      reqBtn.innerHTML = `<span>Запрос разрешения у браузера...</span>`;
     }
 
     navigator.geolocation.getCurrentPosition(
@@ -291,45 +343,130 @@ const LocationGuard = {
         this.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         this.isVerified = true;
         this.hideBlocker();
+        this.startTracking();
 
-        if (Auth.isLoggedIn() && !Auth.isAdmin()) {
+        if (isInteractive) {
+          Toast.success('Геопозиция определена!');
+        }
+        if (typeof Auth !== 'undefined' && Auth.isLoggedIn() && !Auth.isAdmin()) {
           API.post('/user/location', this.coords).catch(() => {});
         }
       },
       (err) => {
-        this.coords = null;
-        this.isVerified = false;
-        let msg = 'Для отображения вашего положения на карте и поиска объектов разрешите доступ к местоположению.';
-        if (err.code === err.PERMISSION_DENIED) {
-          msg = 'Доступ к местоположению отклонён или заблокирован в браузере. Разрешите доступ в настройках страницы.';
+        const btn = document.getElementById('btn-location-guard-request');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+            </svg>
+            <span>Разрешить доступ к геопозиции</span>
+          `;
         }
-        this.showBlocker(msg);
+
+        const reasonEl = document.getElementById('location-guard-reason');
+        if (reasonEl) {
+          reasonEl.style.display = 'block';
+          if (err.code === err.PERMISSION_DENIED) {
+            reasonEl.innerHTML = '⚠️ Браузер заблокировал доступ. Нажмите на значок 🔒 или меню ⋮ в строке адреса вверху ➔ в разделе «Разрешения» включите «Местоположение» и нажмите кнопку снова.';
+          } else {
+            reasonEl.innerHTML = '⚠️ Не удалось получить геопозицию. Проверьте, включён ли GPS / Местоположение в шторке телефона и нажмите кнопку снова.';
+          }
+        }
       },
       { enableHighAccuracy: false, timeout: 15000, maximumAge: 0 }
     );
   },
 
-  showBlocker(reasonText) {
-    if (document.getElementById('location-guard-overlay')) {
+  startTracking() {
+    if (!('geolocation' in navigator)) return;
+
+    if (this.watchId !== null) {
+      navigator.geolocation.clearWatch(this.watchId);
+    }
+
+    // Continuous real-time position watcher
+    this.watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        this.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        if (!this.isVerified) {
+          this.isVerified = true;
+          this.hideBlocker();
+        }
+
+        if (typeof Auth !== 'undefined' && Auth.isLoggedIn() && !Auth.isAdmin()) {
+          API.post('/user/location', this.coords).catch(() => {});
+        }
+      },
+      (err) => {
+        // GPS turned off on device or permission revoked!
+        if (this.isAdminBypassed) return;
+        this.coords = null;
+        this.isVerified = false;
+        this.showBlocker('Геолокация была отключена на вашем устройстве. Включите местоположение для работы сайта.');
+      },
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
+    );
+
+    // Heartbeat check every 6 seconds to catch quick-settings GPS toggle
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = setInterval(() => {
+      if (this.isAdminBypassed) return;
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          this.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          if (!this.isVerified) {
+            this.isVerified = true;
+            this.hideBlocker();
+            Toast.success('Геопозиция восстановлена!');
+          }
+        },
+        (err) => {
+          // GPS was turned off artificially
+          if (this.isAdminBypassed) return;
+          this.coords = null;
+          this.isVerified = false;
+          this.showBlocker('Служба геолокации отключена на устройстве. Включите местоположение для продолжения.');
+        },
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 5000 }
+      );
+    }, 6000);
+  },
+
+  stopTracking() {
+    if (this.watchId !== null) {
+      navigator.geolocation.clearWatch(this.watchId);
+      this.watchId = null;
+    }
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  },
+
+  showBlocker(reasonText = '') {
+    if (this.isAdminBypassed) return;
+    if (this.isVerified && !reasonText) return;
+
+    let overlay = document.getElementById('location-guard-overlay');
+    if (overlay) {
       const msgEl = document.getElementById('location-guard-reason');
-      if (msgEl) {
+      if (msgEl && reasonText) {
         msgEl.style.display = 'block';
         msgEl.textContent = reasonText;
       }
       return;
     }
 
-    const overlay = document.createElement('div');
+    overlay = document.createElement('div');
     overlay.id = 'location-guard-overlay';
     overlay.className = 'location-guard-overlay';
 
-    const isAdmin = Auth.isAdmin();
-    const isTelegram = /Telegram/i.test(navigator.userAgent);
+    const isAdmin = typeof Auth !== 'undefined' && Auth.isAdmin();
 
     overlay.innerHTML = `
       <div class="location-guard-card">
-        <button class="location-guard-close-btn" id="btn-location-guard-close" aria-label="Закрыть">✕</button>
-        
         <div class="location-guard-icon-wrap">
           <div class="location-guard-icon-circle">
             <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -351,23 +488,12 @@ const LocationGuard = {
           ${reasonText || ''}
         </div>
 
-        <div class="location-guard-actions">
-          <button class="btn btn-primary location-guard-btn" id="btn-location-guard-request">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <polygon points="3 11 22 2 13 21 11 13 3 11"/>
-            </svg>
-            <span>Предоставить доступ</span>
-          </button>
-
-          <button class="btn btn-secondary location-guard-btn" id="btn-location-guard-open-browser" style="display:${isTelegram ? 'flex' : 'none'};">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="2" y1="12" x2="22" y2="12"/>
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-            </svg>
-            <span>Открыть в основном браузере (Chrome)</span>
-          </button>
-        </div>
+        <button class="btn btn-primary location-guard-btn" id="btn-location-guard-request">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+          </svg>
+          <span>Разрешить доступ к геопозиции</span>
+        </button>
 
         ${isAdmin ? `
           <div style="margin-top:12px;">
@@ -378,11 +504,11 @@ const LocationGuard = {
         ` : ''}
 
         <div class="location-guard-help">
-          <div class="help-title">💡 Если окно разрешения не появилось:</div>
+          <div class="help-title">💡 Если окно разрешения не открывается:</div>
           <ol class="help-steps">
             <li>Вверху экрана нажмите на <b>значок 🔒 или меню ⋮</b> в строке адреса.</li>
-            <li>В разделе <b>«Разрешения»</b> включите <b>«Местоположение»</b>.</li>
-            <li>Затем нажмите кнопку «Предоставить доступ» снова или обновите страницу.</li>
+            <li>В разделе <b>«Разрешения»</b> (или «Настройки сайта») переключите <b>«Местоположение»</b> на <b>«Разрешить»</b>.</li>
+            <li>Затем нажмите кнопку «Разрешить доступ к геопозиции» выше.</li>
           </ol>
         </div>
       </div>
@@ -391,65 +517,11 @@ const LocationGuard = {
     document.body.appendChild(overlay);
     document.body.classList.add('location-guard-active');
 
-    // Close button handler
-    const closeBtn = overlay.querySelector('#btn-location-guard-close');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', () => {
-        this.hideBlocker();
-      });
-    }
-
-    // Open in external browser for Telegram webviews
-    const openExtBtn = overlay.querySelector('#btn-location-guard-open-browser');
-    if (openExtBtn) {
-      openExtBtn.addEventListener('click', () => {
-        window.open(window.location.href, '_system');
-      });
-    }
-
-    // Request permission button
+    // ONLY 1 BUTTON: Request permission
     const reqBtn = overlay.querySelector('#btn-location-guard-request');
     if (reqBtn) {
       reqBtn.addEventListener('click', () => {
-        reqBtn.disabled = true;
-        reqBtn.innerHTML = `<span>Запрос разрешения у браузера...</span>`;
-        
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            Toast.success('Геопозиция определена! Добро пожаловать.');
-            this.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            this.isVerified = true;
-            this.hideBlocker();
-            if (Auth.isLoggedIn() && !Auth.isAdmin()) {
-              API.post('/user/location', this.coords).catch(() => {});
-            }
-          },
-          (err) => {
-            reqBtn.disabled = false;
-            reqBtn.innerHTML = `
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <polygon points="3 11 22 2 13 21 11 13 3 11"/>
-              </svg>
-              <span>Повторить запрос разрешения</span>
-            `;
-            
-            const reasonEl = document.getElementById('location-guard-reason');
-            if (reasonEl) {
-              reasonEl.style.display = 'block';
-              if (err.code === err.PERMISSION_DENIED) {
-                reasonEl.innerHTML = '⚠️ Доступ заблокирован браузером. Нажмите на значок 🔒 или меню ⋮ в строке адреса вверху экрана ➔ включите «Местоположение» и нажмите снова.';
-              } else {
-                reasonEl.innerHTML = 'Не удалось получить координаты. Проверьте, включена ли служба геолокации в настройках телефона.';
-              }
-            }
-            
-            const openBrowserBtn = document.getElementById('btn-location-guard-open-browser');
-            if (openBrowserBtn) {
-              openBrowserBtn.style.display = 'flex';
-            }
-          },
-          { enableHighAccuracy: false, timeout: 15000, maximumAge: 0 }
-        );
+        this.requestPosition(true);
       });
     }
 
@@ -458,6 +530,7 @@ const LocationGuard = {
       if (bypassBtn) {
         bypassBtn.addEventListener('click', (e) => {
           e.preventDefault();
+          this.isAdminBypassed = true;
           this.hideBlocker();
           Toast.info('Режим СБ: допуск без передачи координат');
         });
@@ -477,11 +550,9 @@ const LocationGuard = {
   }
 };
 
-// Automatically enforce location check on protected pages
+// Automatically enforce location check across the site
 function initLocationGuard() {
-  if (Auth.isLoggedIn() && window.location.pathname !== '/auth.html') {
-    LocationGuard.check();
-  }
+  LocationGuard.init();
 }
 
 if (document.readyState === 'loading') {
