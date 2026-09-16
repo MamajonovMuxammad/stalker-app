@@ -39,16 +39,19 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
 TELEGRAM_BOT_TOKEN = "8902880627:AAG9tIwu8f1vZfEFXQUVZK3Bzzy7SMoDL9U"
 TELEGRAM_BOT_USERNAME = "stalker_recon_bot"
 
-def send_telegram_message(chat_id, text):
+def send_telegram_message(chat_id, text, reply_markup=None):
     if not TELEGRAM_BOT_TOKEN or not chat_id:
         return
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = json.dumps({
+        payload_dict = {
             "chat_id": chat_id,
             "text": text,
             "parse_mode": "HTML"
-        }).encode('utf-8')
+        }
+        if reply_markup is not None:
+            payload_dict["reply_markup"] = reply_markup
+        payload = json.dumps(payload_dict).encode('utf-8')
         req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
         urllib.request.urlopen(req, timeout=5)
     except Exception as e:
@@ -282,24 +285,34 @@ def telegram_webhook():
         if len(parts) > 1 and parts[1].startswith('verify_'):
             code = parts[1].replace('verify_', '').strip()
             welcome = (
-                f"🛡️ <b>STALKER ARCHIVE SECURITY</b>\n\n"
+                f"🛡️ <b>СЛУЖБА БЕЗОПАСНОСТИ STALKER</b>\n\n"
                 f"Ваш проверочный код доступа:\n"
                 f"🔑 <code>{code}</code>\n\n"
-                f"Введите этот 6-значный код на сайте для завершения регистрации."
+                f"<i>(Нажмите на код, чтобы скопировать)</i>\n"
+                f"Введите этот 6-значный код на сайте в окне регистрации."
             )
-            send_telegram_message(chat_id, welcome)
+            remove_kb = {"remove_keyboard": True}
+            send_telegram_message(chat_id, welcome, reply_markup=remove_kb)
             return jsonify({'ok': True})
         else:
             welcome = (
-                f"🛡️ <b>STALKER ARCHIVE BOT</b>\n\n"
-                f"Бот службы безопасности платформы STALKER.\n"
-                f"Для получения проверочного кода перейдите по ссылке с сайта регистрации."
+                f"🛡️ <b>СЛУЖБА БЕЗОПАСНОСТИ STALKER</b>\n\n"
+                f"Приветствуем, сталкер!\n"
+                f"Для верификации и получения проверочного кода нажмите кнопку ниже <b>«📱 Поделиться номером»</b>, либо введите номер на сайте и нажмите кнопку подтверждения."
             )
-            send_telegram_message(chat_id, welcome)
+            keyboard = {
+                "keyboard": [
+                    [{"text": "📱 Поделиться номером", "request_contact": True}]
+                ],
+                "resize_keyboard": True,
+                "one_time_keyboard": True
+            }
+            send_telegram_message(chat_id, welcome, reply_markup=keyboard)
             return jsonify({'ok': True})
 
     if contact and contact.get('phone_number'):
-        raw_phone = contact.get('phone_number').replace('+', '').replace(' ', '')
+        raw_phone = str(contact.get('phone_number', '')).strip().replace(' ', '').replace('-', '')
+        phone_fmt = raw_phone if raw_phone.startswith('+') else f"+{raw_phone}"
         code = f"{random.randint(100000, 999999)}"
         conn = get_db()
         cursor = conn.cursor()
@@ -307,19 +320,40 @@ def telegram_webhook():
         INSERT INTO phone_verifications (phone, code, created_at)
         VALUES (?, ?, ?)
         ON CONFLICT(phone) DO UPDATE SET code = excluded.code, created_at = excluded.created_at
-        """, (f"+{raw_phone}", code, datetime.datetime.now().isoformat()))
+        """, (phone_fmt, code, datetime.datetime.now().isoformat()))
+        # Also store non-plus variant for safety
+        cursor.execute("""
+        INSERT INTO phone_verifications (phone, code, created_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(phone) DO UPDATE SET code = excluded.code, created_at = excluded.created_at
+        """, (phone_fmt.replace('+', ''), code, datetime.datetime.now().isoformat()))
         conn.commit()
         conn.close()
 
         msg = (
-            f"✅ <b>Номер подтверждён: +{raw_phone}</b>\n\n"
-            f"Ваш проверочный код доступа: <code>{code}</code>\n"
-            f"Введите его на сайте регистрации."
+            f"✅ <b>Номер подтверждён: {phone_fmt}</b>\n\n"
+            f"Ваш проверочный код доступа:\n"
+            f"🔑 <code>{code}</code>\n\n"
+            f"<i>(Нажмите на код, чтобы скопировать)</i>\n"
+            f"Введите этот код в окне регистрации на сайте."
         )
-        send_telegram_message(chat_id, msg)
+        remove_kb = {"remove_keyboard": True}
+        send_telegram_message(chat_id, msg, reply_markup=remove_kb)
         return jsonify({'ok': True})
 
-    send_telegram_message(chat_id, "Команда не распознана. Для регистрации нажмите кнопку на сайте.")
+    # Default fallback with contact button
+    fallback = (
+        f"Для получения проверочного кода нажмите кнопку <b>«📱 Поделиться номером»</b> ниже "
+        f"или перейдите по ссылке с сайта регистрации."
+    )
+    keyboard = {
+        "keyboard": [
+            [{"text": "📱 Поделиться номером", "request_contact": True}]
+        ],
+        "resize_keyboard": True,
+        "one_time_keyboard": True
+    }
+    send_telegram_message(chat_id, fallback, reply_markup=keyboard)
     return jsonify({'ok': True})
 
 @app.route('/api/auth/send-tg-code', methods=['POST', 'OPTIONS'])
@@ -331,7 +365,10 @@ def send_tg_code():
     data = request.get_json() or {}
     phone = data.get('phone', '').strip().replace(' ', '').replace('-', '')
     if not phone or len(phone) < 7:
-        return jsonify({'error': 'Укажите корректный номер телефона в международном формате (+998...)'}), 400
+        return jsonify({'error': 'Укажите корректный номер телефона (например: +998901234567)'}), 400
+
+    phone_with_plus = phone if phone.startswith('+') else f"+{phone}"
+    phone_no_plus = phone.replace('+', '')
 
     code = f"{random.randint(100000, 999999)}"
     now = datetime.datetime.now().isoformat()
@@ -342,7 +379,12 @@ def send_tg_code():
     INSERT INTO phone_verifications (phone, code, created_at)
     VALUES (?, ?, ?)
     ON CONFLICT(phone) DO UPDATE SET code = excluded.code, created_at = excluded.created_at
-    """, (phone, code, now))
+    """, (phone_with_plus, code, now))
+    cursor.execute("""
+    INSERT INTO phone_verifications (phone, code, created_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(phone) DO UPDATE SET code = excluded.code, created_at = excluded.created_at
+    """, (phone_no_plus, code, now))
     conn.commit()
     conn.close()
 
@@ -352,7 +394,7 @@ def send_tg_code():
         'message': 'Код верификации сгенерирован',
         'code': code,
         'bot_url': bot_url,
-        'phone': phone
+        'phone': phone_with_plus
     })
 
 @app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
@@ -381,8 +423,10 @@ def register():
     conn = get_db()
     cursor = conn.cursor()
 
-    # Verify phone code
-    cursor.execute("SELECT code FROM phone_verifications WHERE phone = ?", (phone,))
+    # Verify phone code (check both with and without plus)
+    phone_with_plus = phone if phone.startswith('+') else f"+{phone}"
+    phone_no_plus = phone.replace('+', '')
+    cursor.execute("SELECT code FROM phone_verifications WHERE phone = ? OR phone = ? ORDER BY created_at DESC LIMIT 1", (phone_with_plus, phone_no_plus))
     ver = cursor.fetchone()
     if not ver or ver['code'] != code:
         conn.close()
