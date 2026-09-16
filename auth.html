@@ -120,7 +120,7 @@
             <!-- Phone Number (register only) -->
             <div class="form-group register-only" style="display:none;">
               <label class="form-label" for="auth-phone">
-                Номер телефона <span class="required">*</span>
+                Номер телефона (Узбекистан) <span class="required">*</span>
                 <span style="color:var(--text-tertiary); font-size:11px; margin-left:auto; font-weight:400;">🔒 Приватно (только для СБ)</span>
               </label>
               <div class="input-wrapper">
@@ -131,10 +131,13 @@
                   type="tel"
                   id="auth-phone"
                   class="input"
-                  placeholder="+998 90 123 45 67"
-                  style="padding-left:42px;"
+                  placeholder="+998 (90) 123-45-67"
+                  maxlength="19"
+                  autocomplete="tel"
+                  style="padding-left:42px; font-family:monospace; font-size:14px; letter-spacing:0.04em;"
                 />
               </div>
+              <div style="font-size:11px; color:var(--text-tertiary); margin-top:4px;" id="hint-phone">Формат: +998 (XX) XXX-XX-XX (ровно 9 цифр после +998)</div>
               <div class="form-error" id="err-phone" style="display:none;"></div>
               
               <!-- SINGLE Telegram Verification Button -->

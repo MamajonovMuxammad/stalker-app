@@ -362,21 +362,31 @@ def process_telegram_update(data):
             return
 
     if contact and contact.get('phone_number'):
-        raw_phone = str(contact.get('phone_number', '')).strip().replace(' ', '').replace('-', '')
-        phone_fmt = raw_phone if raw_phone.startswith('+') else f"+{raw_phone}"
+        raw_phone = str(contact.get('phone_number', '')).strip()
+        is_val, phone_fmt, _ = validate_uzbekistan_phone(raw_phone)
+        if not is_val:
+            raw_digits = re.sub(r'\D', '', raw_phone)
+            phone_fmt = f"+{raw_digits}"
         code = f"{random.randint(100000, 999999)}"
+        now_iso = datetime.datetime.now().isoformat()
+        try:
+            SupabaseDB.upsert_phone_code(phone_fmt, code)
+            SupabaseDB.upsert_phone_code(phone_fmt.replace('+', ''), code)
+        except Exception as e:
+            print("[Supabase] contact upsert error:", e)
+
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("""
         INSERT INTO phone_verifications (phone, code, created_at)
         VALUES (?, ?, ?)
         ON CONFLICT(phone) DO UPDATE SET code = excluded.code, created_at = excluded.created_at
-        """, (phone_fmt, code, datetime.datetime.now().isoformat()))
+        """, (phone_fmt, code, now_iso))
         cursor.execute("""
         INSERT INTO phone_verifications (phone, code, created_at)
         VALUES (?, ?, ?)
         ON CONFLICT(phone) DO UPDATE SET code = excluded.code, created_at = excluded.created_at
-        """, (phone_fmt.replace('+', ''), code, datetime.datetime.now().isoformat()))
+        """, (phone_fmt.replace('+', ''), code, now_iso))
         conn.commit()
         conn.close()
 
@@ -437,6 +447,35 @@ def start_telegram_polling():
     t.start()
 
 # Launch polling on startup
+# ── Strict Uzbekistan Phone Validation ─────────────────────────────
+def validate_uzbekistan_phone(raw_phone):
+    """
+    Strict validation and normalization for Uzbekistan phone numbers (+998).
+    Allowed operator / regional prefixes (2 digits after 998):
+    20, 33, 50, 55, 61, 62, 65, 66, 67, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 88, 90, 91, 93, 94, 95, 97, 98, 99.
+    Returns: (is_valid, normalized_phone_with_plus, error_msg)
+    """
+    if not raw_phone or not str(raw_phone).strip():
+        return False, None, "Номер телефона обязателен для авторизации в СБ"
+
+    digits = re.sub(r'\D', '', str(raw_phone))
+    if digits.startswith('998'):
+        digits = digits[3:]
+    elif len(digits) == 9:
+        pass
+    else:
+        return False, None, "Укажите полный номер телефона Узбекистана: +998 (XX) XXX-XX-XX (ровно 9 цифр после +998)"
+
+    if len(digits) != 9:
+        return False, None, f"Номер телефона не завершён (введено {len(digits)} из 9 цифр после +998)"
+
+    uz_op_pattern = r'^(20|33|50|55|61|62|65|66|67|69|70|71|72|73|74|75|76|77|78|79|88|90|91|93|94|95|97|98|99)\d{7}$'
+    if not re.match(uz_op_pattern, digits):
+        op = digits[:2]
+        return False, None, f"Неверный код оператора Узбекистана (+998 {op}). Разрешены: 90, 91, 93, 94, 95, 97, 98, 99, 33, 88, 77, 20 и др."
+
+    return True, f"+998{digits}", None
+
 if not IS_VERCEL:
     start_telegram_polling()
 
@@ -447,12 +486,12 @@ def send_tg_code():
         return jsonify({'status': 'ok'}), 200
 
     data = request.get_json() or {}
-    phone = data.get('phone', '').strip().replace(' ', '').replace('-', '')
-    if not phone or len(phone) < 7:
-        return jsonify({'error': 'Укажите корректный номер телефона (например: +998901234567)'}), 400
+    raw_phone = data.get('phone', '')
+    is_valid, phone_with_plus, err = validate_uzbekistan_phone(raw_phone)
+    if not is_valid:
+        return jsonify({'error': err}), 400
 
-    phone_with_plus = phone if phone.startswith('+') else f"+{phone}"
-    phone_no_plus = phone.replace('+', '')
+    phone_no_plus = phone_with_plus.replace('+', '')
 
     code = f"{random.randint(100000, 999999)}"
     now = datetime.datetime.now().isoformat()
@@ -528,11 +567,12 @@ def register():
 
     if len(password) < 6:
         return jsonify({'error': 'Длина пароля должна быть не менее 6 символов'}), 400
-    if not phone:
-        return jsonify({'error': 'Номер телефона обязателен для авторизации в системе безопасности'}), 400
 
-    phone_with_plus = phone if phone.startswith('+') else f"+{phone}"
-    phone_no_plus = phone.replace('+', '')
+    is_valid, phone_with_plus, err = validate_uzbekistan_phone(phone)
+    if not is_valid:
+        return jsonify({'error': err}), 400
+
+    phone_no_plus = phone_with_plus.replace('+', '')
 
     # 1. Verify phone code via Supabase
     tg_code = None

@@ -156,16 +156,85 @@ function getCoordinates() {
   });
 }
 
+// ── Strict Uzbekistan Phone Mask & Validation ─────────────
+const UZ_OPERATOR_CODES = ['20', '33', '50', '55', '61', '62', '65', '66', '67', '69', '70', '71', '72', '73', '74', '75', '76', '77', '78', '79', '88', '90', '91', '93', '94', '95', '97', '98', '99'];
+
+function formatUzPhoneInput(input) {
+  let val = input.value.replace(/\D/g, '');
+  if (val.startsWith('998')) {
+    val = val.slice(3);
+  }
+  // Max 9 subscriber digits
+  val = val.slice(0, 9);
+
+  let formatted = '+998';
+  if (val.length > 0) {
+    formatted += ' (' + val.slice(0, 2);
+  }
+  if (val.length >= 2) {
+    formatted += ') ' + val.slice(2, 5);
+  }
+  if (val.length >= 5) {
+    formatted += '-' + val.slice(5, 7);
+  }
+  if (val.length >= 7) {
+    formatted += '-' + val.slice(7, 9);
+  }
+  input.value = formatted;
+}
+
+function validateUzPhone(raw) {
+  if (!raw || !raw.trim()) {
+    return { valid: false, error: 'Укажите номер телефона' };
+  }
+  const digits = raw.replace(/\D/g, '');
+  let sub = '';
+  if (digits.startsWith('998')) {
+    sub = digits.slice(3);
+  } else if (digits.length === 9) {
+    sub = digits;
+  } else {
+    return {
+      valid: false,
+      error: 'Введите полный номер: +998 (XX) XXX-XX-XX (ровно 9 цифр после +998)'
+    };
+  }
+
+  if (sub.length !== 9) {
+    return {
+      valid: false,
+      error: `Номер не завершён (введено ${sub.length} из 9 цифр после +998)`
+    };
+  }
+
+  const op = sub.slice(0, 2);
+  if (!UZ_OPERATOR_CODES.includes(op)) {
+    return {
+      valid: false,
+      error: `Неверный код оператора (+998 ${op}). Разрешены: 90, 91, 93, 94, 95, 97, 98, 99, 33, 88, 77, 20 и др.`
+    };
+  }
+
+  return {
+    valid: true,
+    normalized: '+998' + sub,
+    display: `+998 (${op}) ${sub.slice(2, 5)}-${sub.slice(5, 7)}-${sub.slice(7, 9)}`
+  };
+}
+
 // Send TG Code Button Handler
 async function handleSendTgCode() {
   clearErrors();
   const phoneEl = document.getElementById('auth-phone');
-  const phone = phoneEl ? phoneEl.value.trim().replace(/\s+/g, '') : '';
+  const phoneCheck = validateUzPhone(phoneEl ? phoneEl.value : '');
 
-  if (!phone || phone.length < 9) {
-    setError('auth-phone', 'Введите номер телефона (например: +998901234567)');
+  if (!phoneCheck.valid) {
+    setError('auth-phone', phoneCheck.error);
+    if (phoneEl) phoneEl.focus();
     return;
   }
+
+  const phone = phoneCheck.normalized;
 
   const btn = document.getElementById('btn-send-tg-code');
   if (btn) { btn.disabled = true; btn.textContent = 'Связь со СБ...'; }
@@ -282,9 +351,12 @@ async function handleAuthSubmit(e) {
       hasError = true;
     }
 
-    if (!phone) {
-      setError('auth-phone', 'Укажите номер телефона');
+    const phoneCheck = validateUzPhone(phoneEl ? phoneEl.value : '');
+    if (!phoneCheck.valid) {
+      setError('auth-phone', phoneCheck.error);
       hasError = true;
+    } else {
+      phone = phoneCheck.normalized;
     }
 
     if (!tgCode) {
@@ -354,6 +426,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const sendTgBtn = document.getElementById('btn-send-tg-code');
   if (sendTgBtn) sendTgBtn.addEventListener('click', handleSendTgCode);
+
+  const phoneInput = document.getElementById('auth-phone');
+  if (phoneInput) {
+    phoneInput.addEventListener('focus', () => {
+      if (!phoneInput.value.trim()) phoneInput.value = '+998 (';
+    });
+    phoneInput.addEventListener('blur', () => {
+      const d = phoneInput.value.replace(/\D/g, '');
+      if (d === '998' || d === '') phoneInput.value = '';
+    });
+    phoneInput.addEventListener('input', () => {
+      formatUzPhoneInput(phoneInput);
+    });
+  }
 
   const form = document.getElementById('auth-form');
   if (form) form.addEventListener('submit', handleAuthSubmit);
