@@ -47,7 +47,7 @@ async function loadStats() {
     const el = id => document.getElementById(id);
     if (el('stat-total-locs'))    el('stat-total-locs').textContent    = stats.total_locations    || 0;
     if (el('stat-pending-subs'))  el('stat-pending-subs').textContent  = stats.pending_submissions  || 0;
-    if (el('stat-rejected-subs')) el('stat-rejected-subs').textContent = stats.rejected_submissions || 0;
+    if (el('stat-pending-users')) el('stat-pending-users').textContent = stats.pending_users        || 0;
     if (el('stat-users-count'))   el('stat-users-count').textContent   = stats.registered_stalkers  || 0;
   } catch (e) {
     console.warn('Stats load error', e);
@@ -314,13 +314,31 @@ async function loadUsersTable() {
   }
 }
 
+let userFilterStatus = 'all';
+
+function filterUsersTable(status, btn) {
+  userFilterStatus = status;
+  const buttons = document.querySelectorAll('#users-status-filters button');
+  buttons.forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const searchInput = document.getElementById('users-search-input');
+  renderUsersTable(searchInput ? searchInput.value.trim().toLowerCase() : '');
+}
+
 function renderUsersTable(query = '') {
   const tbody = document.getElementById('users-table-tbody');
   if (!tbody) return;
 
   let filtered = allRadarUsers;
+
+  // Filter by status if not 'all'
+  if (userFilterStatus !== 'all') {
+    filtered = filtered.filter(u => (u.status || 'approved') === userFilterStatus);
+  }
+
+  // Filter by search query
   if (query) {
-    filtered = allRadarUsers.filter(u =>
+    filtered = filtered.filter(u =>
       (u.username && u.username.toLowerCase().includes(query)) ||
       (u.callsign && u.callsign.toLowerCase().includes(query)) ||
       (u.phone && u.phone.toLowerCase().includes(query)) ||
@@ -329,7 +347,7 @@ function renderUsersTable(query = '') {
   }
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-tertiary); padding:30px;">Пользователи не найдены</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-tertiary); padding:30px;">Пользователи не найдены</td></tr>`;
     return;
   }
 
@@ -342,17 +360,48 @@ function renderUsersTable(query = '') {
       ? `<span class="badge" style="border-color:var(--accent); color:var(--accent);">Админ</span>`
       : `<span class="badge">Следопыт</span>`;
 
-    const actionBtn = u.coords ? `
-      <button class="btn btn-secondary btn-sm" onclick="showUserOnRadar(${u.coords[0]}, ${u.coords[1]})" style="white-space:nowrap; padding:4px 8px; font-size:11px;">
-        🎯 На радаре
-      </button>
-    ` : `<span style="color:var(--text-tertiary); font-size:11px;">—</span>`;
+    const status = u.status || 'approved';
+    let statusBadge = '';
+    if (status === 'pending') {
+      statusBadge = `<span class="badge warning" style="font-weight:700;">● На рассмотрении</span>`;
+    } else if (status === 'approved') {
+      statusBadge = `<span class="badge success">● Одобрен</span>`;
+    } else {
+      statusBadge = `<span class="badge danger">● Отклонён</span>`;
+    }
+
+    let actionsHtml = '';
+    if (status === 'pending') {
+      actionsHtml = `
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn btn-sm" onclick="approveUserRegistration(${u.id})" style="background:var(--success-dim); color:var(--success); border:1px solid var(--success); padding:4px 10px; font-size:11px; font-weight:700;">
+            ✓ Одобрить
+          </button>
+          <button class="btn btn-sm btn-danger" onclick="rejectUserRegistration(${u.id})" style="padding:4px 10px; font-size:11px;">
+            ✕ Отклонить
+          </button>
+        </div>
+      `;
+    } else if (status === 'approved') {
+      actionsHtml = `
+        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+          ${u.coords ? `<button class="btn btn-secondary btn-sm" onclick="showUserOnRadar(${u.coords[0]}, ${u.coords[1]})" style="white-space:nowrap; padding:3px 8px; font-size:11px;">🎯 Радар</button>` : ''}
+          ${u.role !== 'admin' ? `<button class="btn btn-ghost btn-sm" onclick="rejectUserRegistration(${u.id})" style="padding:3px 6px; font-size:11px; color:var(--danger);" title="Отозвать допуск">Отозвать</button>` : ''}
+        </div>
+      `;
+    } else {
+      actionsHtml = `
+        <button class="btn btn-secondary btn-sm" onclick="approveUserRegistration(${u.id})" style="padding:4px 10px; font-size:11px;">
+          Восстановить
+        </button>
+      `;
+    }
 
     return `
       <tr>
         <td>
           <div style="display:flex; align-items:center; gap:8px;">
-            <div style="width:28px; height:28px; border-radius:6px; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px;">
+            <div style="width:30px; height:30px; border-radius:8px; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; overflow:hidden;">
               ${(u.callsign || u.username || 'S')[0].toUpperCase()}
             </div>
             <div>
@@ -365,13 +414,39 @@ function renderUsersTable(query = '') {
           <code style="color:var(--accent); font-weight:700; font-size:var(--text-xs); letter-spacing:0.04em;">${u.phone}</code>
         </td>
         <td style="font-size:var(--text-xs); color:var(--text-secondary);">${u.email || '—'}</td>
+        <td>${statusBadge}</td>
         <td>${roleBadge}</td>
         <td style="font-family:monospace; font-size:var(--text-xs);">${coordsStr}</td>
         <td style="font-size:var(--text-xs); color:var(--text-secondary);">${u.last_seen || u.created_at || '—'}</td>
-        <td>${actionBtn}</td>
+        <td>${actionsHtml}</td>
       </tr>
     `;
   }).join('');
+}
+
+async function approveUserRegistration(userId) {
+  try {
+    await API.post(`/admin/users/${userId}/approve`, {});
+    Toast.success('Пользователь успешно одобрен!');
+    await loadRadar();
+    await loadUsersTable();
+    await loadStats();
+  } catch (e) {
+    Toast.error(e.message || 'Ошибка при одобрении пользователя');
+  }
+}
+
+async function rejectUserRegistration(userId) {
+  if (!confirm('Отклонить допуск этого пользователя?')) return;
+  try {
+    await API.post(`/admin/users/${userId}/reject`, {});
+    Toast.warning('Допуск пользователя отклонён');
+    await loadRadar();
+    await loadUsersTable();
+    await loadStats();
+  } catch (e) {
+    Toast.error(e.message || 'Ошибка при отклонении');
+  }
 }
 
 function showUserOnRadar(lat, lng) {

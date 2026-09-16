@@ -222,6 +222,22 @@ async function handleAuthSubmit(e) {
     phone = phoneEl ? phoneEl.value.trim().replace(/\s+/g, '') : '';
     tgCode = tgCodeEl ? tgCodeEl.value.trim() : '';
 
+    // Username validation: Latin letters, numbers, underscore only (no Cyrillic)
+    const latinRegex = /^[a-zA-Z0-9_]{3,30}$/;
+    if (!latinRegex.test(username)) {
+      setError('auth-username', 'Логин должен содержать только латинские буквы (a-z), цифры и _ (от 3 до 30 знаков, без кириллицы)');
+      hasError = true;
+    }
+
+    // Callsign validation: Russian and English allowed
+    if (callsign) {
+      const callsignRegex = /^[a-zA-Zа-яА-ЯёЁ0-9\s_-]{2,30}$/;
+      if (!callsignRegex.test(callsign)) {
+        setError('auth-callsign', 'Позывной может содержать только русские и латинские буквы, цифры, дефис и пробелы');
+        hasError = true;
+      }
+    }
+
     if (!email) {
       setError('auth-email', 'Укажите email адрес');
       hasError = true;
@@ -237,7 +253,7 @@ async function handleAuthSubmit(e) {
 
     if (!tgCode) {
       const codeGroup = document.getElementById('tg-code-group');
-      if (codeGroup) codeGroup.style.display = 'flex';
+      if (codeGroup) codeGroup.style.display = 'block';
       setError('auth-tg-code', 'Получите и введите 6-значный код из Telegram бота');
       hasError = true;
     }
@@ -256,16 +272,27 @@ async function handleAuthSubmit(e) {
 
   try {
     if (isRegisterMode) {
-      await Auth.register(username, password, email, callsign, phone, tgCode, lat, lng);
+      const res = await Auth.register(username, password, email, callsign, phone, tgCode, lat, lng);
+      if (res && res.status === 'pending') {
+        const pendingModal = document.getElementById('pending-modal');
+        if (pendingModal) {
+          pendingModal.style.display = 'flex';
+        } else {
+          Toast.info('Ваша заявка на регистрацию принята и находится на рассмотрении администрации.');
+        }
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Заявка отправлена';
+        }
+        return;
+      }
       Toast.success('Регистрация успешна! Допуск оформлен.');
+      setTimeout(() => { window.location.href = '/'; }, 700);
     } else {
       await Auth.login(username, password, lat, lng);
       Toast.success('Успешный вход в аккаунт');
+      setTimeout(() => { window.location.href = '/'; }, 700);
     }
-
-    setTimeout(() => {
-      window.location.href = '/';
-    }, 700);
   } catch (err) {
     Toast.error(err.message || 'Ошибка авторизации. Проверьте данные');
     generateCaptcha();

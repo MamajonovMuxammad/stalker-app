@@ -7,6 +7,7 @@ import random
 import json
 import urllib.request
 import shutil
+import re
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -108,7 +109,8 @@ def init_db():
         last_lat REAL,
         last_lng REAL,
         last_seen TEXT,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'approved'
     )
     """)
     
@@ -179,6 +181,7 @@ def init_db():
         ("ALTER TABLE users ADD COLUMN last_lat REAL",),
         ("ALTER TABLE users ADD COLUMN last_lng REAL",),
         ("ALTER TABLE users ADD COLUMN last_seen TEXT",),
+        ("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'approved'",),
     ]
     for m in migrations:
         try:
@@ -488,6 +491,15 @@ def register():
 
     if not username or not email or not password:
         return jsonify({'error': 'Не все обязательные поля формуляра заполнены'}), 400
+
+    # Username: Latin letters, numbers, and underscore only (3-30 chars)
+    if not re.match(r'^[a-zA-Z0-9_]{3,30}$', username):
+        return jsonify({'error': 'Имя пользователя (логин) должно содержать только латинские буквы, цифры и символ подчеркивания (от 3 до 30 символов)'}), 400
+
+    # Callsign: Russian and Latin letters, numbers, spaces, hyphens (2-30 chars)
+    if callsign and not re.match(r'^[a-zA-Zа-яА-ЯёЁ0-9\s_-]{2,30}$', callsign):
+        return jsonify({'error': 'Позывной может содержать только русские и латинские буквы, цифры, дефис и пробелы (от 2 до 30 символов)'}), 400
+
     if len(password) < 6:
         return jsonify({'error': 'Длина пароля должна быть не менее 6 символов'}), 400
     if not phone:
@@ -513,32 +525,16 @@ def register():
     now_iso = datetime.datetime.now().isoformat()
     pwd_hash = generate_password_hash(password)
     cursor.execute("""
-    INSERT INTO users (username, email, password_hash, role, callsign, phone, phone_verified, clearance_level, last_lat, last_lng, last_seen, created_at)
-    VALUES (?, ?, ?, 'stalker', ?, ?, 1, 1, ?, ?, ?, ?)
+    INSERT INTO users (username, email, password_hash, role, callsign, phone, phone_verified, clearance_level, last_lat, last_lng, last_seen, created_at, status)
+    VALUES (?, ?, ?, 'stalker', ?, ?, 1, 1, ?, ?, ?, ?, 'pending')
     """, (username, email, pwd_hash, callsign, phone, lat, lng, now_iso, now_iso))
     conn.commit()
     user_id = cursor.lastrowid
     conn.close()
 
-    token = jwt.encode({
-        'user_id': user_id,
-        'username': username,
-        'role': 'stalker',
-        'callsign': callsign,
-        'clearance_level': 1,
-        'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
-    }, SECRET_KEY, algorithm="HS256")
-
     return jsonify({
-        'message': 'Допуск успешно оформлен',
-        'token': token,
-        'user': {
-            'id': user_id,
-            'username': username,
-            'role': 'stalker',
-            'callsign': callsign,
-            'clearance_level': 1
-        }
+        'status': 'pending',
+        'message': 'Ваша заявка на регистрацию принята и находится на рассмотрении администрации базы STALKER. После одобрения вы сможете войти в систему под своим логином.'
     }), 201
 
 @app.route('/api/auth/login', methods=['POST', 'OPTIONS'])
@@ -563,7 +559,16 @@ def login():
 
     if not user or not check_password_hash(user['password_hash'], password):
         conn.close()
-        return jsonify({'error': 'Неверный позывной или код доступа'}), 401
+        return jsonify({'error': 'Неверный логин или пароль'}), 401
+
+    # Check registration approval status
+    user_status = user['status'] if ('status' in user.keys() and user['status']) else 'approved'
+    if user_status == 'pending':
+        conn.close()
+        return jsonify({'error': 'Ваша заявка на регистрацию находится на рассмотрении администрации. Ожидайте подтверждения допуска.'}), 403
+    if user_status == 'rejected':
+        conn.close()
+        return jsonify({'error': 'Ваша заявка на регистрацию была отклонена администратором.'}), 403
 
     now_iso = datetime.datetime.now().isoformat()
     if lat is not None and lng is not None:
@@ -915,7 +920,7 @@ def get_admin_radar(current_user):
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, email, role, callsign, phone, last_lat, last_lng, last_seen, created_at FROM users")
+    cursor.execute("SELECT id, username, email, role, callsign, phone, last_lat, last_lng, last_seen, created_at, status FROM users")
     rows = cursor.fetchall()
     conn.close()
 
@@ -928,12 +933,67 @@ def get_admin_radar(current_user):
             'role': r['role'],
             'callsign': r['callsign'],
             'phone': r['phone'] or 'Не указан',
+            'status': r['status'] if ('status' in r.keys() and r['status']) else 'approved',
             'coords': [r['last_lat'], r['last_lng']] if (r['last_lat'] and r['last_lng']) else None,
             'last_seen': r['last_seen'],
             'created_at': r['created_at']
         })
 
     return jsonify(users)
+
+@app.route('/api/admin/users/<int:user_id>/approve', methods=['POST', 'OPTIONS'])
+@app.route('/admin/users/<int:user_id>/approve', methods=['POST', 'OPTIONS'])
+@token_required
+def approve_user(current_user, user_id):
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
+    if current_user.get('role') != 'admin':
+        return jsonify({'error': 'Требуются права Администратора'}), 403
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET status = 'approved' WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'status': 'ok', 'message': 'Пользователь успешно одобрен'})
+
+@app.route('/api/admin/users/<int:user_id>/reject', methods=['POST', 'OPTIONS'])
+@app.route('/admin/users/<int:user_id>/reject', methods=['POST', 'OPTIONS'])
+@token_required
+def reject_user(current_user, user_id):
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
+    if current_user.get('role') != 'admin':
+        return jsonify({'error': 'Требуются права Администратора'}), 403
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET status = 'rejected' WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'status': 'ok', 'message': 'Заявка пользователя отклонена'})
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE', 'OPTIONS'])
+@app.route('/admin/users/<int:user_id>', methods=['DELETE', 'OPTIONS'])
+@token_required
+def delete_user(current_user, user_id):
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+
+    if current_user.get('role') != 'admin':
+        return jsonify({'error': 'Требуются права Администратора'}), 403
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'status': 'ok', 'message': 'Пользователь удален'})
 
 @app.route('/api/admin/stats', methods=['GET', 'OPTIONS'])
 @app.route('/admin/stats', methods=['GET', 'OPTIONS'])
@@ -951,13 +1011,19 @@ def get_stats():
     rejected_count = cursor.fetchone()[0]
     cursor.execute("SELECT COUNT(*) FROM users")
     users_count = cursor.fetchone()[0]
+    try:
+        cursor.execute("SELECT COUNT(*) FROM users WHERE status = 'pending'")
+        pending_users = cursor.fetchone()[0]
+    except Exception:
+        pending_users = 0
     conn.close()
 
     return jsonify({
         'total_locations': approved_count,
         'pending_submissions': pending_count,
         'rejected_submissions': rejected_count,
-        'registered_stalkers': users_count
+        'registered_stalkers': users_count,
+        'pending_users': pending_users
     })
 
 handler = app

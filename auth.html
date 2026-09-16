@@ -6,6 +6,10 @@
   <title>Вход и регистрация — STALKER</title>
   <meta name="description" content="Авторизация в STALKER — платформе для исследователей заброшенных объектов Узбекистана.">
 
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="/img/stalker-logo.jpg">
+  <link rel="shortcut icon" href="/favicon.jpg">
+
   <!-- Design System CSS -->
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/base.css">
@@ -18,7 +22,7 @@
   <header class="site-header">
     <nav class="navbar">
       <a href="/" class="navbar-brand">
-        <div class="brand-icon">S</div>
+        <div class="brand-icon"><img src="/img/stalker-logo.jpg" alt="STALKER" class="brand-logo-img"></div>
         <span class="brand-name">STALK<span>ER</span></span>
       </a>
       <div class="navbar-actions" style="margin-left:auto;">
@@ -34,7 +38,7 @@
 
         <!-- Card Header -->
         <div class="auth-card-header">
-          <div class="auth-logo">S</div>
+          <div class="auth-logo" style="width:52px; height:52px; border-radius:12px; overflow:hidden; border:1px solid rgba(255,255,255,0.2); box-shadow:0 0 16px rgba(37,99,235,0.3); margin:0 auto var(--sp-3);"><img src="/img/stalker-logo.jpg" alt="STALKER" style="width:100%; height:100%; object-fit:cover;"></div>
           <h1 style="font-size:var(--text-xl); font-weight:800; letter-spacing:-0.02em; margin-bottom:var(--sp-1);" id="auth-title">Войдите в аккаунт</h1>
           <p style="font-size:var(--text-sm); color:var(--text-secondary);" id="auth-desc">Добро пожаловать обратно</p>
         </div>
@@ -70,6 +74,7 @@
                   style="padding-left:42px;"
                 />
               </div>
+              <div style="font-size:11px; color:var(--text-tertiary); margin-top:4px;" id="hint-username">Латинские буквы (a-z), цифры и _ (без кириллицы)</div>
               <div class="form-error" id="err-username" style="display:none;"></div>
             </div>
 
@@ -89,6 +94,8 @@
                   style="padding-left:42px;"
                 />
               </div>
+              <div style="font-size:11px; color:var(--text-tertiary); margin-top:4px;">Разрешены русский и английский (напр: СЕВЕР-4, GHOST)</div>
+              <div class="form-error" id="err-callsign" style="display:none;"></div>
             </div>
 
             <!-- Email (register only) -->
@@ -209,6 +216,29 @@
     </div>
   </div>
 
+  <!-- Pending Registration Modal -->
+  <div class="modal-backdrop" id="pending-modal" style="display:none; z-index:9999;" role="dialog" aria-modal="true">
+    <div class="modal" style="max-width:460px; text-align:center; padding:var(--sp-6);">
+      <div style="width:64px; height:64px; border-radius:50%; background:rgba(245,158,11,0.12); border:1.5px solid var(--warning); display:flex; align-items:center; justify-content:center; margin:0 auto var(--sp-4); color:var(--warning); box-shadow:0 0 20px rgba(245,158,11,0.25);">
+        <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <h2 style="font-size:var(--text-lg); font-weight:800; margin-bottom:var(--sp-2); color:var(--text-primary);">Заявка отправлена на рассмотрение</h2>
+      <p style="font-size:var(--text-sm); color:var(--text-secondary); line-height:1.6; margin-bottom:var(--sp-5);">
+        Ваша заявка на регистрацию принята и направлена в Службу Безопасности базы STALKER.
+        <br><br>
+        После проверки и одобрения администратором вы сможете войти в систему под своим логином.
+      </p>
+      <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+        <button type="button" class="btn btn-secondary" onclick="switchMode('login'); document.getElementById('pending-modal').style.display='none';">
+          Перейти к форме входа
+        </button>
+        <a href="/" class="btn btn-primary">
+          На главную страницу
+        </a>
+      </div>
+    </div>
+  </div>
+
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
   <script src="/js/data.js"></script>
@@ -218,13 +248,34 @@
       const isRegister = mode === 'register';
       document.getElementById('tab-login').classList.toggle('active', !isRegister);
       document.getElementById('tab-register').classList.toggle('active', isRegister);
-      document.querySelectorAll('.register-only').forEach(el => el.style.display = isRegister ? 'flex' : 'none');
+      document.querySelectorAll('.register-only').forEach(el => {
+        el.style.display = isRegister ? 'block' : 'none';
+      });
+      // tg-code-group is shown only when user requests code
+      const tgGroup = document.getElementById('tg-code-group');
+      if (tgGroup && !isRegister) tgGroup.style.display = 'none';
+
       document.getElementById('auth-title').textContent = isRegister ? 'Создать аккаунт' : 'Войдите в аккаунт';
       document.getElementById('auth-desc').textContent = isRegister ? 'Присоединяйтесь к сообществу исследователей' : 'Добро пожаловать обратно';
       document.getElementById('auth-submit-btn').textContent = isRegister ? 'Зарегистрироваться' : 'Войти';
+      
+      const hintUser = document.getElementById('hint-username');
+      if (hintUser) hintUser.style.display = isRegister ? 'block' : 'none';
+
       // update mode for auth.js
       if (window.setAuthMode) window.setAuthMode(mode);
     }
+
+    // Check URL query param for default mode
+    document.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const mode = urlParams.get('mode') || urlParams.get('tab');
+      if (mode === 'register') {
+        switchMode('register');
+      } else {
+        switchMode('login');
+      }
+    });
   </script>
 </body>
 </html>

@@ -6,6 +6,10 @@
   <title>Панель модерации — STALKER</title>
   <meta name="description" content="Административная панель модерации заявок и радар пользователей на STALKER.">
 
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="/img/stalker-logo.jpg">
+  <link rel="shortcut icon" href="/favicon.jpg">
+
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
@@ -21,7 +25,7 @@
   <header class="site-header">
     <nav class="navbar">
       <a href="/" class="navbar-brand">
-        <div class="brand-icon">S</div>
+        <div class="brand-icon"><img src="/img/stalker-logo.jpg" alt="STALKER" class="brand-logo-img"></div>
         <span class="brand-name">STALK<span>ER</span></span>
       </a>
 
@@ -72,7 +76,7 @@
   <aside class="mobile-nav-drawer" id="mobile-nav-drawer" aria-label="Мобильное меню">
     <div class="mobile-drawer-header">
       <a href="/" class="navbar-brand">
-        <div class="brand-icon">S</div>
+        <div class="brand-icon"><img src="/img/stalker-logo.jpg" alt="STALKER" class="brand-logo-img"></div>
         <span class="brand-name">STALK<span>ER</span></span>
       </a>
       <button class="mobile-drawer-close" id="mobile-drawer-close" aria-label="Закрыть меню">
@@ -127,15 +131,15 @@
           </div>
           <div class="card stat-card">
             <div class="stat-value" style="color:var(--warning);" id="stat-pending-subs">0</div>
-            <div class="stat-label">На рассмотрении</div>
+            <div class="stat-label">Заявок на объекты</div>
           </div>
           <div class="card stat-card">
-            <div class="stat-value" style="color:var(--danger);" id="stat-rejected-subs">0</div>
-            <div class="stat-label">Отклонено</div>
+            <div class="stat-value" style="color:var(--amber);" id="stat-pending-users">0</div>
+            <div class="stat-label">Заявок на допуск</div>
           </div>
           <div class="card stat-card">
             <div class="stat-value" id="stat-users-count">0</div>
-            <div class="stat-label">Пользователей</div>
+            <div class="stat-label">Всего сталкеров</div>
           </div>
         </div>
       </div>
@@ -237,11 +241,19 @@
           <div class="card">
             <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--sp-3);">
               <div>
-                <h3 style="font-size:var(--text-base); font-weight:700;">👥 Полный реестр зарегистрированных сталкеров</h3>
-                <p style="font-size:var(--text-xs); color:var(--text-tertiary); margin-top:2px;">Конфиденциальная база аккаунтов, номеров телефонов и GPS-координат</p>
+                <h3 style="font-size:var(--text-base); font-weight:700;">👥 Реестр сталкеров и заявки на регистрацию</h3>
+                <p style="font-size:var(--text-xs); color:var(--text-tertiary); margin-top:2px;">Модерация доступа новых пользователей, одобрение досье и просмотр GPS</p>
               </div>
-              <div style="max-width:320px; width:100%;">
-                <input type="search" id="users-search-input" class="input input-sm" placeholder="Поиск по позывному, логину, тел..." style="font-size:var(--text-xs);">
+              <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                <div class="btn-group" id="users-status-filters" style="display:flex; gap:4px;">
+                  <button class="btn btn-secondary btn-sm active" data-user-filter="all" onclick="filterUsersTable('all', this)">Все</button>
+                  <button class="btn btn-secondary btn-sm" data-user-filter="pending" onclick="filterUsersTable('pending', this)" style="color:var(--warning);">На рассмотрении</button>
+                  <button class="btn btn-secondary btn-sm" data-user-filter="approved" onclick="filterUsersTable('approved', this)" style="color:var(--success);">Одобренные</button>
+                  <button class="btn btn-secondary btn-sm" data-user-filter="rejected" onclick="filterUsersTable('rejected', this)" style="color:var(--danger);">Отклонённые</button>
+                </div>
+                <div style="min-width:220px;">
+                  <input type="search" id="users-search-input" class="input input-sm" placeholder="Поиск по позывному, логину..." style="font-size:var(--text-xs);">
+                </div>
               </div>
             </div>
             <div class="table-wrapper">
@@ -251,10 +263,11 @@
                     <th>Позывной / Логин</th>
                     <th>Телефон (🔒 СБ)</th>
                     <th>Email</th>
+                    <th>Статус допуска</th>
                     <th>Роль</th>
                     <th>GPS Координаты</th>
-                    <th>Последняя активность</th>
-                    <th>Действие</th>
+                    <th>Активность</th>
+                    <th>Модерация</th>
                   </tr>
                 </thead>
                 <tbody id="users-table-tbody"></tbody>

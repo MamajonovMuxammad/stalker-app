@@ -6,6 +6,10 @@
   <title>Добавить объект — STALKER</title>
   <meta name="description" content="Добавьте заброшенный или исторический объект на карту STALKER.">
 
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="/img/stalker-logo.jpg">
+  <link rel="shortcut icon" href="/favicon.jpg">
+
   <!-- Leaflet CSS for mini coord picker -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
@@ -21,7 +25,7 @@
   <header class="site-header">
     <nav class="navbar">
       <a href="/" class="navbar-brand">
-        <div class="brand-icon">S</div>
+        <div class="brand-icon"><img src="/img/stalker-logo.jpg" alt="STALKER" class="brand-logo-img"></div>
         <span class="brand-name">STALK<span>ER</span></span>
       </a>
 
@@ -46,7 +50,7 @@
 
       <div class="navbar-actions">
         <a href="/auth.html" class="btn btn-ghost btn-sm" id="btn-login" style="display:none;">Войти</a>
-        <a href="/auth.html" class="btn btn-primary btn-sm" id="btn-register" style="display:none;">Регистрация</a>
+        <a href="/auth.html?mode=register" class="btn btn-primary btn-sm" id="btn-register" style="display:none;">Регистрация</a>
         <div class="dropdown" id="user-dropdown" style="display:none;">
           <button class="avatar-btn" id="avatar-trigger" aria-label="Меню пользователя">
             <span id="avatar-letter">U</span>
@@ -78,7 +82,7 @@
   <aside class="mobile-nav-drawer" id="mobile-nav-drawer" aria-label="Мобильное меню">
     <div class="mobile-drawer-header">
       <a href="/" class="navbar-brand">
-        <div class="brand-icon">S</div>
+        <div class="brand-icon"><img src="/img/stalker-logo.jpg" alt="STALKER" class="brand-logo-img"></div>
         <span class="brand-name">STALK<span>ER</span></span>
       </a>
       <button class="mobile-drawer-close" id="mobile-drawer-close" aria-label="Закрыть меню">

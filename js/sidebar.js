@@ -268,7 +268,7 @@ function renderUserProfile() {
     userEl.innerHTML = `
       <div style="display:flex; align-items:center; gap:var(--sp-3); width:100%;">
         <a href="/auth.html" class="btn btn-secondary btn-sm" style="flex:1;">Войти</a>
-        <a href="/auth.html" class="btn btn-primary btn-sm" style="flex:1;">Регистрация</a>
+        <a href="/auth.html?mode=register" class="btn btn-primary btn-sm" style="flex:1;">Регистрация</a>
       </div>
     `;
   }

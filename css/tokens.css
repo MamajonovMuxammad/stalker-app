@@ -10,6 +10,7 @@
   --bg-base:        #0A0A0A;    /* Pure near-black (X/Twitter style) */
   --bg-elevated:    #111111;    /* Cards, raised surfaces */
   --bg-overlay:     #161616;    /* Modals, sidebars */
+  --bg-surface:     #0E121A;    /* Solid opaque surface for drawers/panels */
   --bg-hover:       #1A1A1A;    /* Hover states */
   --bg-active:      #222222;    /* Active/pressed */
   --bg-subtle:      #0F0F0F;    /* Subtle background separation */

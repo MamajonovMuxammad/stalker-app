@@ -68,9 +68,11 @@ const Auth = {
 
   async register(username, password, email, callsign, phone, code, lat = null, lng = null) {
     const data = await API.post('/auth/register', { username, password, email, callsign, phone, code, lat, lng });
-    localStorage.setItem('stalker_token', data.token);
-    localStorage.setItem('stalker_user',  JSON.stringify(data.user));
-    return data.user;
+    if (data && data.token) {
+      localStorage.setItem('stalker_token', data.token);
+      localStorage.setItem('stalker_user',  JSON.stringify(data.user));
+    }
+    return data;
   },
 
   async syncLocation() {
@@ -233,7 +235,7 @@ function initGlobalNav() {
           <div style="font-size:11px; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:0.06em; font-weight:700;">Вход в сеть STALKER</div>
           <div style="display:flex; gap:8px;">
             <a href="/auth.html" class="btn btn-secondary btn-sm" style="flex:1; text-align:center; justify-content:center;">Войти</a>
-            <a href="/auth.html" class="btn btn-primary btn-sm" style="flex:1; text-align:center; justify-content:center;">Регистрация</a>
+            <a href="/auth.html?mode=register" class="btn btn-primary btn-sm" style="flex:1; text-align:center; justify-content:center;">Регистрация</a>
           </div>
         </div>
       `;
