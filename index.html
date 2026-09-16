@@ -67,14 +67,66 @@
           </div>
         </div>
       </div>
+
+      <!-- Mobile Hamburger Button -->
+      <button class="burger-btn" id="burger-toggle-btn" aria-label="Меню навигации">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
     </nav>
   </header>
 
-  <!-- MAP PAGE -->
-  <div class="map-page" role="main">
+  <!-- Mobile Navigation Drawer -->
+  <div class="mobile-drawer-backdrop" id="mobile-drawer-backdrop"></div>
+  <aside class="mobile-nav-drawer" id="mobile-nav-drawer" aria-label="Мобильное меню">
+    <div class="mobile-drawer-header">
+      <a href="/" class="navbar-brand">
+        <div class="brand-icon">S</div>
+        <span class="brand-name">STALK<span>ER</span></span>
+      </a>
+      <button class="mobile-drawer-close" id="mobile-drawer-close" aria-label="Закрыть меню">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
 
-    <!-- Sidebar -->
-    <aside class="map-sidebar" aria-label="Объекты на карте">
+    <div class="mobile-drawer-user" id="mobile-drawer-user">
+      <!-- Injected by JS -->
+    </div>
+
+    <nav class="mobile-drawer-nav">
+      <a href="/" class="mobile-nav-link active" id="mob-nav-map">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6-10l6-3m6 13l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 9m0 8V9"/></svg>
+        <span>Карта объектов</span>
+      </a>
+      <a href="/catalog.html" class="mobile-nav-link" id="mob-nav-catalog">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span>Каталог локаций</span>
+      </a>
+      <a href="/submit.html" class="mobile-nav-link" id="mob-nav-submit">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        <span>Добавить объект</span>
+      </a>
+      <a href="/admin.html" class="mobile-nav-link" id="mob-nav-admin" style="display:none;">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span>Модерация и Радар</span>
+        <span class="badge accent" style="margin-left:auto; font-size:10px;">СБ</span>
+      </a>
+    </nav>
+
+    <div class="mobile-drawer-footer" id="mobile-drawer-footer">
+      <!-- Injected by JS -->
+    </div>
+  </aside>
+
+  <!-- MAP PAGE -->
+  <div class="map-page" id="map-page" role="main">
+
+    <!-- Mobile Backdrop for Sidebar -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+    <!-- Sidebar (CLOSED by default: has 'collapsed') -->
+    <aside class="map-sidebar collapsed" id="map-sidebar" aria-label="Объекты на карте">
       <div class="map-sidebar-header">
         <div style="margin-bottom: var(--sp-4);">
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: var(--sp-3);">
@@ -107,6 +159,14 @@
 
     <!-- Map itself -->
     <div class="map-main">
+      <!-- Floating Sidebar Toggle Button -->
+      <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" aria-label="Открыть список объектов" title="Список объектов">
+        <svg class="sidebar-toggle-arrow" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+        <span class="sidebar-toggle-text">Объекты</span>
+      </button>
+
       <div id="map"></div>
     </div>
   </div>

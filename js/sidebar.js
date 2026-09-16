@@ -87,6 +87,83 @@ function handleLocationCardClick(locId) {
   document.querySelectorAll('.sidebar-location-item').forEach(el => el.classList.remove('active'));
   const item = document.querySelector(`.sidebar-location-item[data-id="${locId}"]`);
   if (item) item.classList.add('active');
+
+  // Auto-close sidebar on mobile to view map and card
+  if (window.innerWidth <= 768) {
+    closeSidebar();
+  }
+}
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('map-sidebar');
+  const page = document.getElementById('map-page');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  if (!sidebar) return;
+
+  const isMobile = window.innerWidth <= 768;
+  if (isMobile) {
+    const willOpen = !sidebar.classList.contains('mobile-open');
+    if (willOpen) {
+      sidebar.classList.add('mobile-open');
+      sidebar.classList.remove('collapsed');
+      if (page) page.classList.add('sidebar-open');
+      if (backdrop) backdrop.classList.add('active');
+    } else {
+      sidebar.classList.remove('mobile-open');
+      sidebar.classList.add('collapsed');
+      if (page) page.classList.remove('sidebar-open');
+      if (backdrop) backdrop.classList.remove('active');
+    }
+  } else {
+    const isCollapsed = sidebar.classList.contains('collapsed');
+    if (isCollapsed) {
+      sidebar.classList.remove('collapsed');
+      if (page) page.classList.add('sidebar-open');
+    } else {
+      sidebar.classList.add('collapsed');
+      if (page) page.classList.remove('sidebar-open');
+    }
+  }
+
+  setTimeout(() => {
+    if (typeof map !== 'undefined' && map) {
+      map.invalidateSize({ animate: true });
+    }
+  }, 360);
+}
+
+function closeSidebar() {
+  const sidebar = document.getElementById('map-sidebar');
+  const page = document.getElementById('map-page');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  if (!sidebar) return;
+
+  sidebar.classList.remove('mobile-open');
+  sidebar.classList.add('collapsed');
+  if (page) page.classList.remove('sidebar-open');
+  if (backdrop) backdrop.classList.remove('active');
+
+  setTimeout(() => {
+    if (typeof map !== 'undefined' && map) {
+      map.invalidateSize({ animate: true });
+    }
+  }, 360);
+}
+
+function setupSidebarToggle() {
+  const toggleBtn = document.getElementById('sidebar-toggle-btn');
+  const backdrop = document.getElementById('sidebar-backdrop');
+
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleSidebar();
+    });
+  }
+
+  if (backdrop) {
+    backdrop.addEventListener('click', closeSidebar);
+  }
 }
 
 function setupFilterEvents() {
@@ -188,6 +265,7 @@ function renderUserProfile() {
 
 document.addEventListener('DOMContentLoaded', () => {
   initMap();
+  setupSidebarToggle();
   setupFilterEvents();
   renderNavAuth();
   renderUserProfile();

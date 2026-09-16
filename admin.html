@@ -57,8 +57,57 @@
           </div>
         </div>
       </div>
+
+      <!-- Mobile Hamburger Button -->
+      <button class="burger-btn" id="burger-toggle-btn" aria-label="Меню навигации">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
     </nav>
   </header>
+
+  <!-- Mobile Navigation Drawer -->
+  <div class="mobile-drawer-backdrop" id="mobile-drawer-backdrop"></div>
+  <aside class="mobile-nav-drawer" id="mobile-nav-drawer" aria-label="Мобильное меню">
+    <div class="mobile-drawer-header">
+      <a href="/" class="navbar-brand">
+        <div class="brand-icon">S</div>
+        <span class="brand-name">STALK<span>ER</span></span>
+      </a>
+      <button class="mobile-drawer-close" id="mobile-drawer-close" aria-label="Закрыть меню">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="mobile-drawer-user" id="mobile-drawer-user">
+      <!-- Injected by JS -->
+    </div>
+
+    <nav class="mobile-drawer-nav">
+      <a href="/" class="mobile-nav-link" id="mob-nav-map">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6-10l6-3m6 13l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 9m0 8V9"/></svg>
+        <span>Карта объектов</span>
+      </a>
+      <a href="/catalog.html" class="mobile-nav-link" id="mob-nav-catalog">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span>Каталог локаций</span>
+      </a>
+      <a href="/submit.html" class="mobile-nav-link" id="mob-nav-submit">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        <span>Добавить объект</span>
+      </a>
+      <a href="/admin.html" class="mobile-nav-link active" id="mob-nav-admin">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span>Модерация и Радар</span>
+        <span class="badge accent" style="margin-left:auto; font-size:10px;">СБ</span>
+      </a>
+    </nav>
+
+    <div class="mobile-drawer-footer" id="mobile-drawer-footer">
+      <!-- Injected by JS -->
+    </div>
+  </aside>
 
   <div class="page-wrapper">
 
@@ -132,6 +181,12 @@
           <span class="badge accent" id="count-radar" style="margin-left:auto;">LIVE</span>
         </button>
 
+        <button class="admin-nav-item" data-status="users">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Реестр сталкеров
+          <span class="badge" id="count-users" style="margin-left:auto;">0</span>
+        </button>
+
         <hr style="margin: var(--sp-3) 0;">
         <div class="admin-sidebar-title">Быстрые действия</div>
         <a href="/submit.html" class="admin-nav-item" style="text-decoration:none;">
@@ -160,19 +215,34 @@
           </div>
         </div>
 
-        <!-- Radar Section (hidden by default) -->
-        <div id="radar-container" style="display:none; flex-direction:column; gap:var(--sp-6);">
+        <!-- Radar Section (ONLY the map) -->
+        <div id="radar-container" style="display:none; flex-direction:column; gap:var(--sp-4);">
           <div class="card" style="overflow:hidden;">
-            <div class="card-header">
-              <h3 style="font-size:var(--text-base); font-weight:700;">Интерактивная карта геопозиций следопытов</h3>
-              <span class="badge accent">Приватно (Только СБ)</span>
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <h3 style="font-size:var(--text-base); font-weight:700;">📡 Тактический радар пользователей (LIVE GPS)</h3>
+                <p style="font-size:var(--text-xs); color:var(--text-tertiary); margin-top:2px;">Нажмите на метку сталкера, чтобы приблизиться и просмотреть досье</p>
+              </div>
+              <div style="display:flex; gap:var(--sp-2); align-items:center;">
+                <span class="badge accent">🔒 Доступ СБ</span>
+                <button class="btn btn-secondary btn-sm" id="btn-refresh-radar" style="padding:4px 10px; font-size:12px;">Обновить</button>
+              </div>
             </div>
-            <div id="radar-map" style="height:360px; width:100%;"></div>
+            <div id="radar-map" style="height:580px; width:100%;"></div>
           </div>
+        </div>
 
+        <!-- Users Registry Section (Separate dedicated page) -->
+        <div id="users-container" style="display:none; flex-direction:column; gap:var(--sp-4);">
           <div class="card">
-            <div class="card-header">
-              <h3 style="font-size:var(--text-base); font-weight:700;">Реестр пользователей и номера телефонов</h3>
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--sp-3);">
+              <div>
+                <h3 style="font-size:var(--text-base); font-weight:700;">👥 Полный реестр зарегистрированных сталкеров</h3>
+                <p style="font-size:var(--text-xs); color:var(--text-tertiary); margin-top:2px;">Конфиденциальная база аккаунтов, номеров телефонов и GPS-координат</p>
+              </div>
+              <div style="max-width:320px; width:100%;">
+                <input type="search" id="users-search-input" class="input input-sm" placeholder="Поиск по позывному, логину, тел..." style="font-size:var(--text-xs);">
+              </div>
             </div>
             <div class="table-wrapper">
               <table class="table" style="width:100%;">
@@ -180,12 +250,14 @@
                   <tr>
                     <th>Позывной / Логин</th>
                     <th>Телефон (🔒 СБ)</th>
+                    <th>Email</th>
                     <th>Роль</th>
-                    <th>Координаты</th>
+                    <th>GPS Координаты</th>
                     <th>Последняя активность</th>
+                    <th>Действие</th>
                   </tr>
                 </thead>
-                <tbody id="radar-users-tbody"></tbody>
+                <tbody id="users-table-tbody"></tbody>
               </table>
             </div>
           </div>

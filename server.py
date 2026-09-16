@@ -249,7 +249,15 @@ def index():
 @app.route('/uploads/<path:filename>')
 @app.route('/api/uploads/<path:filename>')
 def serve_upload(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename)
+    for folder in [
+        UPLOAD_FOLDER,
+        os.path.join(os.path.dirname(__file__), 'uploads'),
+        os.path.join(os.path.dirname(__file__), '..', 'uploads'),
+        os.path.join(os.getcwd(), 'uploads')
+    ]:
+        if os.path.exists(os.path.join(folder, filename)):
+            return send_from_directory(folder, filename)
+    return jsonify({'error': 'Файл не найден'}), 404
 
 @app.route('/api/upload', methods=['POST', 'OPTIONS'])
 @app.route('/upload', methods=['POST', 'OPTIONS'])

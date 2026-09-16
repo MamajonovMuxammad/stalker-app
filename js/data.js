@@ -130,3 +130,124 @@ const Toast = {
 };
 
 Toast.init();
+
+/* ── Global Navigation & Mobile Drawer ───────────────────── */
+function initGlobalNav() {
+  const burgerBtn = document.getElementById('burger-toggle-btn');
+  const drawer = document.getElementById('mobile-nav-drawer');
+  const backdrop = document.getElementById('mobile-drawer-backdrop');
+  const closeBtn = document.getElementById('mobile-drawer-close');
+
+  function openDrawer() {
+    if (drawer) drawer.classList.add('open');
+    if (backdrop) backdrop.classList.add('active');
+    if (burgerBtn) burgerBtn.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeDrawer() {
+    if (drawer) drawer.classList.remove('open');
+    if (backdrop) backdrop.classList.remove('active');
+    if (burgerBtn) burgerBtn.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  if (burgerBtn) {
+    burgerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (drawer && drawer.classList.contains('open')) {
+        closeDrawer();
+      } else {
+        openDrawer();
+      }
+    });
+  }
+
+  if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
+  if (backdrop) backdrop.addEventListener('click', closeDrawer);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeDrawer();
+  });
+
+  // Highlight active link in mobile drawer based on URL
+  const path = window.location.pathname;
+  const links = {
+    '/': 'mob-nav-map',
+    '/index.html': 'mob-nav-map',
+    '/catalog.html': 'mob-nav-catalog',
+    '/submit.html': 'mob-nav-submit',
+    '/admin.html': 'mob-nav-admin'
+  };
+  Object.values(links).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+  });
+  const currentLinkId = links[path] || (path.includes('catalog') ? 'mob-nav-catalog' : (path.includes('submit') ? 'mob-nav-submit' : (path.includes('admin') ? 'mob-nav-admin' : 'mob-nav-map')));
+  const activeEl = document.getElementById(currentLinkId);
+  if (activeEl) activeEl.classList.add('active');
+
+  // Render User Profile & Auth in mobile drawer
+  const user = Auth.getUser();
+  const drawerUser = document.getElementById('mobile-drawer-user');
+  const drawerFooter = document.getElementById('mobile-drawer-footer');
+  const mobAdminLink = document.getElementById('mob-nav-admin');
+  const navAdminLink = document.getElementById('nav-admin');
+
+  if (user) {
+    if (mobAdminLink && user.role === 'admin') mobAdminLink.style.display = 'flex';
+    if (navAdminLink && user.role === 'admin') navAdminLink.style.display = 'flex';
+
+    if (drawerUser) {
+      drawerUser.innerHTML = `
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div class="avatar-btn" style="width:42px; height:42px; font-size:16px; font-weight:700; flex-shrink:0;">
+            ${(user.callsign || user.username || 'U')[0].toUpperCase()}
+          </div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-weight:700; font-size:15px; color:var(--text-primary); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
+              ${user.callsign || user.username}
+            </div>
+            <div style="font-size:12px; color:var(--text-tertiary); margin-top:2px;">
+              ${user.role === 'admin' ? '<span style="color:#60A5FA;">🛡 Администратор СБ</span>' : '🧭 Следопыт'}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (drawerFooter) {
+      drawerFooter.innerHTML = `
+        <button class="btn btn-secondary btn-block" id="mob-btn-logout" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Выйти из системы
+        </button>
+      `;
+      const mobLogout = document.getElementById('mob-btn-logout');
+      if (mobLogout) mobLogout.addEventListener('click', () => Auth.logout());
+    }
+  } else {
+    if (drawerUser) {
+      drawerUser.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div style="font-size:11px; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:0.06em; font-weight:700;">Вход в сеть STALKER</div>
+          <div style="display:flex; gap:8px;">
+            <a href="/auth.html" class="btn btn-secondary btn-sm" style="flex:1; text-align:center; justify-content:center;">Войти</a>
+            <a href="/auth.html" class="btn btn-primary btn-sm" style="flex:1; text-align:center; justify-content:center;">Регистрация</a>
+          </div>
+        </div>
+      `;
+    }
+    if (drawerFooter) {
+      drawerFooter.innerHTML = `
+        <div style="font-size:11px; color:var(--text-tertiary); text-align:center;">STALKER Recon System · Uzbekistan</div>
+      `;
+    }
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initGlobalNav);
+} else {
+  initGlobalNav();
+}

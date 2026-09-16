@@ -139,61 +139,69 @@ function renderMapMarkers(locations) {
     loc._lat = lat;
     loc._lng = lng;
 
+    // Resolve photo URL (array or comma-separated string)
+    let photo = null;
+    if (Array.isArray(loc.photos) && loc.photos.length > 0) {
+      photo = loc.photos[0];
+    } else if (typeof loc.photos === 'string' && loc.photos.length > 0) {
+      photo = loc.photos.split(',')[0].trim();
+    }
+
+    // Diff colors
+    const diffColors = { 1: '#10B981', 2: '#10B981', 3: '#F59E0B', 4: '#EF4444', 5: '#EF4444' };
+    const dColor = diffColors[loc.difficulty] || '#5A5A5A';
+    const typeLabel = (typeof TYPE_LABELS !== 'undefined' ? TYPE_LABELS[loc.type] : null) || loc.type;
+
+    // Clean, seamless popup card
+    const popupHtml = `
+      <div class="map-popup-card">
+        ${photo ? `
+          <div class="map-popup-img-wrap">
+            <img src="${photo}" alt="${loc.name}" class="map-popup-img" onerror="this.parentElement.style.display='none'">
+          </div>
+        ` : ''}
+        <div class="map-popup-body">
+          <h3 class="map-popup-title">${loc.name}</h3>
+          <div class="map-popup-meta">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span>${loc.region}</span>
+            <span>·</span>
+            <span>${typeLabel}</span>
+          </div>
+          <div class="map-popup-footer">
+            <span class="badge" style="color:${dColor}; border-color:${dColor}; background:rgba(0,0,0,0.5); font-size:11px;">
+              ${loc.difficulty}★ сложность
+            </span>
+            <a href="/location.html?id=${loc.id}" class="btn btn-primary btn-sm" style="padding: 4px 10px; font-size:12px;">
+              Подробнее →
+            </a>
+          </div>
+        </div>
+      </div>
+    `;
+
     const marker = L.marker([lat, lng], {
       icon: createMarkerIcon(loc),
       title: loc.name,
     });
 
+    // Bind popup ONCE so repeated clicks always open it reliably
+    marker.bindPopup(popupHtml, {
+      maxWidth: 290,
+      minWidth: 260,
+      className: 'stalker-clean-popup',
+      closeButton: true,
+      autoPanPadding: [20, 20],
+    });
+
     marker.on('click', () => {
-      // Highlight sidebar item
+      // Highlight and scroll to sidebar item
       document.querySelectorAll('.sidebar-location-item').forEach(el => el.classList.remove('active'));
       const item = document.querySelector(`.sidebar-location-item[data-id="${loc.id}"]`);
       if (item) {
         item.classList.add('active');
         item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
-
-      // Diff colors
-      const diffColors = { 1: '#10B981', 2: '#10B981', 3: '#F59E0B', 4: '#EF4444', 5: '#EF4444' };
-      const dColor = diffColors[loc.difficulty] || '#5A5A5A';
-      const typeLabel = (typeof TYPE_LABELS !== 'undefined' ? TYPE_LABELS[loc.type] : null) || loc.type;
-      const photo = (loc.photos && loc.photos.length > 0) ? loc.photos[0] : null;
-
-      // Clean, seamless popup card without any image offset
-      const popupHtml = `
-        <div class="map-popup-card">
-          ${photo ? `
-            <div class="map-popup-img-wrap">
-              <img src="${photo}" alt="${loc.name}" class="map-popup-img" onerror="this.parentElement.style.display='none'">
-            </div>
-          ` : ''}
-          <div class="map-popup-body">
-            <h3 class="map-popup-title">${loc.name}</h3>
-            <div class="map-popup-meta">
-              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-              <span>${loc.region}</span>
-              <span>·</span>
-              <span>${typeLabel}</span>
-            </div>
-            <div class="map-popup-footer">
-              <span class="badge" style="color:${dColor}; border-color:${dColor}; background:rgba(0,0,0,0.5); font-size:11px;">
-                ${loc.difficulty}★ сложность
-              </span>
-              <a href="/location.html?id=${loc.id}" class="btn btn-primary btn-sm" style="padding: 4px 10px; font-size:12px;">
-                Подробнее →
-              </a>
-            </div>
-          </div>
-        </div>
-      `;
-
-      marker.bindPopup(popupHtml, {
-        maxWidth: 290,
-        minWidth: 260,
-        className: 'stalker-clean-popup',
-        closeButton: true,
-        autoPanPadding: [20, 20],
-      }).openPopup();
     });
 
     markersLayer.addLayer(marker);
@@ -214,7 +222,7 @@ function focusLocation(locId) {
     markersLayer.eachLayer(m => {
       const ll = m.getLatLng();
       if (Math.abs(ll.lat - locLat) < 0.0001 && Math.abs(ll.lng - locLng) < 0.0001) {
-        m.fire('click');
+        m.openPopup();
       }
     });
   }, 900);

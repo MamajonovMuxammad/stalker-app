@@ -89,20 +89,33 @@ function updateBadgeCounts() {
 function renderSubmissions() {
   const listEl = document.getElementById('submissions-list');
   const radarContainer = document.getElementById('radar-container');
+  const usersContainer = document.getElementById('users-container');
   const sectionTitle = document.getElementById('admin-section-title');
   const sectionSubtitle = document.getElementById('admin-section-subtitle');
 
   if (adminCurrentFilter === 'radar') {
     if (listEl) listEl.style.display = 'none';
+    if (usersContainer) usersContainer.style.display = 'none';
     if (radarContainer) radarContainer.style.display = 'flex';
-    if (sectionTitle) sectionTitle.textContent = 'Радар следопытов';
-    if (sectionSubtitle) sectionSubtitle.textContent = 'Мониторинг активных пользователей, геопозиций и реестр контактов (🔒 Служба Безопасности)';
+    if (sectionTitle) sectionTitle.textContent = '📡 Радар следопытов (LIVE)';
+    if (sectionSubtitle) sectionSubtitle.textContent = 'Интерактивная карта геопозиций пользователей в реальном времени';
     loadRadar();
+    return;
+  }
+
+  if (adminCurrentFilter === 'users') {
+    if (listEl) listEl.style.display = 'none';
+    if (radarContainer) radarContainer.style.display = 'none';
+    if (usersContainer) usersContainer.style.display = 'flex';
+    if (sectionTitle) sectionTitle.textContent = '👥 Реестр сталкеров';
+    if (sectionSubtitle) sectionSubtitle.textContent = 'Конфиденциальная база зарегистрированных аккаунтов, номеров и координат (🔒 Служба Безопасности)';
+    loadUsersTable();
     return;
   }
 
   if (listEl) listEl.style.display = 'block';
   if (radarContainer) radarContainer.style.display = 'none';
+  if (usersContainer) usersContainer.style.display = 'none';
   if (sectionTitle) sectionTitle.textContent = 'Заявки на модерацию';
   if (sectionSubtitle) sectionSubtitle.textContent = 'Верификация координат, фотоматериалов и принятие решений';
 
@@ -175,20 +188,23 @@ function renderSubmissions() {
 }
 
 /* ── Radar & User Geolocation ────────────────────────────── */
-async function loadRadar() {
+async function loadRadar(focusCoords = null) {
   try {
     allRadarUsers = await API.get('/admin/radar');
+    const countRadar = document.getElementById('count-radar');
+    if (countRadar) countRadar.textContent = allRadarUsers.filter(u => u.coords).length;
+    const countUsers = document.getElementById('count-users');
+    if (countUsers) countUsers.textContent = allRadarUsers.length;
   } catch (e) {
     allRadarUsers = [];
     Toast.error('Не удалось загрузить данные радара');
     return;
   }
 
-  initRadarMap();
-  renderRadarUsers();
+  initRadarMap(focusCoords);
 }
 
-function initRadarMap() {
+function initRadarMap(focusCoords = null) {
   const mapEl = document.getElementById('radar-map');
   if (!mapEl) return;
 
@@ -205,70 +221,174 @@ function initRadarMap() {
     }).addTo(radarMap);
 
     radarMarkersLayer = L.layerGroup().addTo(radarMap);
-  } else {
-    setTimeout(() => radarMap.invalidateSize(), 150);
   }
 
+  setTimeout(() => radarMap.invalidateSize(), 150);
   radarMarkersLayer.clearLayers();
 
   allRadarUsers.forEach(u => {
     if (u.coords && u.coords[0] && u.coords[1]) {
+      const lat = u.coords[0];
+      const lng = u.coords[1];
       const pulseSvg = `
-        <div style="position:relative; width:24px; height:24px;">
-          <div style="position:absolute; inset:0; border-radius:50%; background:var(--accent); opacity:0.8; animation: ping 1.5s cubic-bezier(0,0,0.2,1) infinite;"></div>
-          <div style="position:absolute; inset:4px; border-radius:50%; background:#fff; border:2px solid var(--accent);"></div>
+        <div style="position:relative; width:28px; height:28px; cursor:pointer;">
+          <div style="position:absolute; inset:0; border-radius:50%; background:var(--accent); opacity:0.6; animation: ping 1.8s cubic-bezier(0,0,0.2,1) infinite;"></div>
+          <div style="position:absolute; inset:5px; border-radius:50%; background:#0B0F19; border:2.5px solid var(--accent); display:flex; align-items:center; justify-content:center; box-shadow:0 0 10px rgba(37,99,235,0.8);">
+            <div style="width:6px; height:6px; border-radius:50%; background:#60A5FA;"></div>
+          </div>
         </div>
       `;
       const icon = L.divIcon({
         html: pulseSvg,
-        className: '',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
+        className: 'radar-user-icon',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
       });
 
-      const marker = L.marker([u.coords[0], u.coords[1]], { icon });
-      marker.bindPopup(`
-        <div style="font-family:var(--font); padding:4px;">
-          <div style="font-weight:700; font-size:13px; color:#F1F1F1;">${u.callsign || u.username}</div>
-          <div style="font-size:11px; color:#60A5FA; margin-top:2px;">📞 ${u.phone}</div>
-          <div style="font-size:10px; color:#888; margin-top:4px;">${u.coords[0].toFixed(4)}, ${u.coords[1].toFixed(4)}</div>
+      const marker = L.marker([lat, lng], { icon });
+
+      const popupContent = `
+        <div style="font-family:var(--font); min-width:220px; padding:6px 2px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+            <div style="width:32px; height:32px; border-radius:8px; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">
+              ${(u.callsign || u.username || 'S')[0].toUpperCase()}
+            </div>
+            <div>
+              <div style="font-weight:700; font-size:14px; color:#F8FAFC;">${u.callsign || u.username}</div>
+              <div style="font-size:11px; color:#94A3B8;">@${u.username} · <span style="color:#10B981;">● Online</span></div>
+            </div>
+          </div>
+          <div style="background:rgba(255,255,255,0.06); padding:8px; border-radius:6px; font-size:12px; display:flex; flex-direction:column; gap:4px; margin-bottom:8px;">
+            <div><span style="color:#94A3B8;">Телефон (СБ):</span> <code style="color:#60A5FA; font-weight:700;">${u.phone}</code></div>
+            <div><span style="color:#94A3B8;">Роль:</span> <b style="color:#F1F5F9;">${u.role === 'admin' ? 'Администратор' : 'Следопыт'}</b></div>
+            <div><span style="color:#94A3B8;">Координаты:</span> <code style="color:#E2E8F0;">${lat.toFixed(5)}, ${lng.toFixed(5)}</code></div>
+            <div><span style="color:#94A3B8;">Активность:</span> <span style="color:#CBD5E1;">${u.last_seen || 'Недавно'}</span></div>
+          </div>
+          <button class="btn btn-secondary btn-sm w-full" onclick="zoomToUser([${lat}, ${lng}])" style="padding:4px 8px; font-size:11px; justify-content:center;">
+            🔍 Приблизить координаты
+          </button>
         </div>
-      `);
+      `;
+
+      marker.bindPopup(popupContent, { maxWidth: 280, minWidth: 220 });
+
+      // Click on marker zooms in to user smoothly!
+      marker.on('click', () => {
+        radarMap.flyTo([lat, lng], 16, { animate: true, duration: 1.2 });
+      });
+
       radarMarkersLayer.addLayer(marker);
     }
   });
+
+  if (focusCoords && focusCoords[0] && focusCoords[1]) {
+    radarMap.flyTo(focusCoords, 16, { animate: true, duration: 1.2 });
+  }
 }
 
-function renderRadarUsers() {
-  const tbody = document.getElementById('radar-users-tbody');
-  if (!tbody) return;
+function zoomToUser(coords) {
+  if (radarMap && coords) {
+    radarMap.flyTo(coords, 17, { animate: true, duration: 1.0 });
+  }
+}
 
-  if (allRadarUsers.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-tertiary);">Пользователи отсутствуют</td></tr>`;
+/* ── Users Table Section ─────────────────────────────────── */
+async function loadUsersTable() {
+  const tbody = document.getElementById('users-table-tbody');
+  if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px;"><div class="loading-spinner" style="margin:0 auto;"></div></td></tr>`;
+
+  try {
+    allRadarUsers = await API.get('/admin/radar');
+  } catch (e) {
+    allRadarUsers = [];
+    Toast.error('Не удалось загрузить реестр пользователей');
     return;
   }
 
-  tbody.innerHTML = allRadarUsers.map(u => {
-    const coordsStr = u.coords ? `${u.coords[0].toFixed(4)}, ${u.coords[1].toFixed(4)}` : '<span style="color:var(--text-tertiary);">Не зафиксированы</span>';
+  renderUsersTable();
+
+  // Search input filter
+  const searchInput = document.getElementById('users-search-input');
+  if (searchInput) {
+    searchInput.oninput = () => renderUsersTable(searchInput.value.trim().toLowerCase());
+  }
+}
+
+function renderUsersTable(query = '') {
+  const tbody = document.getElementById('users-table-tbody');
+  if (!tbody) return;
+
+  let filtered = allRadarUsers;
+  if (query) {
+    filtered = allRadarUsers.filter(u =>
+      (u.username && u.username.toLowerCase().includes(query)) ||
+      (u.callsign && u.callsign.toLowerCase().includes(query)) ||
+      (u.phone && u.phone.toLowerCase().includes(query)) ||
+      (u.email && u.email.toLowerCase().includes(query))
+    );
+  }
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-tertiary); padding:30px;">Пользователи не найдены</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(u => {
+    const coordsStr = u.coords
+      ? `${u.coords[0].toFixed(4)}, ${u.coords[1].toFixed(4)}`
+      : '<span style="color:var(--text-tertiary); font-style:italic;">Не зафиксированы</span>';
+
     const roleBadge = u.role === 'admin'
       ? `<span class="badge" style="border-color:var(--accent); color:var(--accent);">Админ</span>`
       : `<span class="badge">Следопыт</span>`;
 
+    const actionBtn = u.coords ? `
+      <button class="btn btn-secondary btn-sm" onclick="showUserOnRadar(${u.coords[0]}, ${u.coords[1]})" style="white-space:nowrap; padding:4px 8px; font-size:11px;">
+        🎯 На радаре
+      </button>
+    ` : `<span style="color:var(--text-tertiary); font-size:11px;">—</span>`;
+
     return `
       <tr>
         <td>
-          <div style="font-weight:600; color:var(--text-primary);">${u.callsign || u.username}</div>
-          <div style="font-size:var(--text-xs); color:var(--text-tertiary);">${u.email}</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="width:28px; height:28px; border-radius:6px; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px;">
+              ${(u.callsign || u.username || 'S')[0].toUpperCase()}
+            </div>
+            <div>
+              <div style="font-weight:600; color:var(--text-primary);">${u.callsign || u.username}</div>
+              <div style="font-size:var(--text-xs); color:var(--text-tertiary);">@${u.username}</div>
+            </div>
+          </div>
         </td>
         <td>
-          <code style="color:var(--accent); font-weight:700; font-size:var(--text-xs);">${u.phone}</code>
+          <code style="color:var(--accent); font-weight:700; font-size:var(--text-xs); letter-spacing:0.04em;">${u.phone}</code>
         </td>
+        <td style="font-size:var(--text-xs); color:var(--text-secondary);">${u.email || '—'}</td>
         <td>${roleBadge}</td>
         <td style="font-family:monospace; font-size:var(--text-xs);">${coordsStr}</td>
-        <td style="font-size:var(--text-xs); color:var(--text-tertiary);">${u.last_seen || u.created_at || '—'}</td>
+        <td style="font-size:var(--text-xs); color:var(--text-secondary);">${u.last_seen || u.created_at || '—'}</td>
+        <td>${actionBtn}</td>
       </tr>
     `;
   }).join('');
+}
+
+function showUserOnRadar(lat, lng) {
+  // Switch to radar tab
+  document.querySelectorAll('.admin-nav-item').forEach(el => el.classList.remove('active'));
+  const radarBtn = document.querySelector('.admin-nav-item[data-status="radar"]');
+  if (radarBtn) radarBtn.classList.add('active');
+
+  adminCurrentFilter = 'radar';
+  const listEl = document.getElementById('submissions-list');
+  const radarContainer = document.getElementById('radar-container');
+  const usersContainer = document.getElementById('users-container');
+  if (listEl) listEl.style.display = 'none';
+  if (usersContainer) usersContainer.style.display = 'none';
+  if (radarContainer) radarContainer.style.display = 'flex';
+
+  loadRadar([lat, lng]);
 }
 
 /* ── Approve ─────────────────────────────────────────────── */
