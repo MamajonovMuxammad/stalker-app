@@ -1495,3 +1495,196 @@ tr:last-child td { border-bottom: none; }
 }
 
 .side-panel-body { padding: var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-5); flex: 1; }
+
+/* ─────────────────────────────────────────────────────────
+   LOCATION GUARD OVERLAY & SECURITY BLOCKER
+   ───────────────────────────────────────────────────────── */
+
+body.location-guard-active {
+  overflow: hidden !important;
+}
+
+.location-guard-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  background: rgba(6, 9, 15, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-4);
+  animation: locGuardFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.location-guard-overlay.fade-out {
+  animation: locGuardFadeOut 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes locGuardFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes locGuardFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; pointer-events: none; }
+}
+
+.location-guard-card {
+  width: 100%;
+  max-width: 500px;
+  background: #0E131F;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 0 50px rgba(239, 68, 68, 0.15), 0 20px 40px rgba(0, 0, 0, 0.8);
+  padding: 36px 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.location-guard-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #EF4444, #F59E0B, #EF4444, transparent);
+}
+
+.location-guard-radar {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.radar-ping {
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.25);
+  animation: radarPing 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.radar-circle {
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  background: #182030;
+  border: 2px solid #EF4444;
+  color: #F87171;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 25px rgba(239, 68, 68, 0.4);
+}
+
+@keyframes radarPing {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.location-guard-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #FCA5A5;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 999px;
+  margin-bottom: 14px;
+}
+
+.location-guard-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #F8FAFC;
+  margin: 0 0 10px 0;
+  line-height: 1.25;
+}
+
+.location-guard-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 18px 0;
+}
+
+.location-guard-desc b {
+  color: var(--text-primary);
+}
+
+.location-guard-status {
+  width: 100%;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #FCA5A5;
+  margin-bottom: 20px;
+  line-height: 1.45;
+}
+
+.location-guard-btn {
+  background: #2563EB !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  padding: 14px 20px !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 0 20px rgba(37, 99, 235, 0.45) !important;
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.location-guard-btn:hover {
+  background: #1D4ED8 !important;
+  box-shadow: 0 0 30px rgba(37, 99, 235, 0.65) !important;
+  transform: translateY(-1px);
+}
+
+.location-guard-help {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  width: 100%;
+  text-align: left;
+}
+
+.location-guard-help .help-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #CBD5E1;
+  margin-bottom: 8px;
+}
+
+.location-guard-help .help-steps {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #94A3B8;
+  line-height: 1.55;
+}
+
+.location-guard-help .help-steps li {
+  margin-bottom: 4px;
+}
+

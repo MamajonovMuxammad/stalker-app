@@ -274,3 +274,172 @@ if (document.readyState === 'loading') {
     window.location.replace('/');
   }
 })();
+
+/* ── Location Guard (Security Geolocation Blocker) ────────── */
+const LocationGuard = {
+  coords: null,
+  isVerified: false,
+
+  check() {
+    if (!('geolocation' in navigator)) {
+      this.showBlocker('Ваш браузер или устройство не поддерживает определение геопозиции.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        this.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        this.isVerified = true;
+        this.hideBlocker();
+
+        if (Auth.isLoggedIn() && !Auth.isAdmin()) {
+          API.post('/user/location', this.coords).catch(() => {});
+        }
+      },
+      (err) => {
+        this.coords = null;
+        this.isVerified = false;
+        let msg = 'Для работы с картой и объектами Зоны необходимо разрешить передачу геопозиции.';
+        if (err.code === err.PERMISSION_DENIED) {
+          msg = 'Доступ к местоположению отклонён или заблокирован в браузере. Без геопозиции использование системы STALKER закрыто.';
+        }
+        this.showBlocker(msg);
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+    );
+  },
+
+  showBlocker(reasonText) {
+    if (document.getElementById('location-guard-overlay')) {
+      const msgEl = document.getElementById('location-guard-reason');
+      if (msgEl) msgEl.textContent = reasonText;
+      return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'location-guard-overlay';
+    overlay.className = 'location-guard-overlay';
+
+    const isAdmin = Auth.isAdmin();
+
+    overlay.innerHTML = `
+      <div class="location-guard-card">
+        <div class="location-guard-radar">
+          <div class="radar-ping"></div>
+          <div class="radar-circle">
+            <svg width="34" height="34" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="location-guard-badge">⚠️ СЛУЖБА БЕЗОПАСНОСТИ СБ · ДОСТУП ОГРАНИЧЕН</div>
+        
+        <h2 class="location-guard-title">ТРЕБУЕТСЯ ГЕОЛОКАЦИЯ</h2>
+        
+        <p class="location-guard-desc">
+          Для обеспечения безопасности сталкеров, мониторинга Зоны и работы интерактивной карты объектов, доступ к платформе <b>STALKER</b> открывается только при активной передаче геопозиции.
+        </p>
+
+        <div class="location-guard-status" id="location-guard-reason">
+          ${reasonText || 'Доступ к местоположению заблокирован или не предоставлен'}
+        </div>
+
+        <button class="btn btn-primary btn-block location-guard-btn" id="btn-location-guard-request">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/>
+            <polygon points="12 8 8 12 12 16 12 8"/>
+            <line x1="12" y1="16" x2="12" y2="12"/>
+          </svg>
+          Разрешить доступ к местоположению
+        </button>
+
+        ${isAdmin ? `
+          <div style="margin-top:14px;">
+            <button type="button" id="btn-admin-bypass-loc" style="background:none; border:none; color:var(--text-tertiary); font-size:11px; cursor:pointer; text-decoration:underline;">
+              🛡️ Режим СБ: Продолжить без GPS (Администратор)
+            </button>
+          </div>
+        ` : ''}
+
+        <div class="location-guard-help">
+          <div class="help-title">🔒 Если вы нажали «Заблокировать» в браузере:</div>
+          <ol class="help-steps">
+            <li>Нажмите на <b>значок замка 🔒</b> (или параметров сайта) слева от адресной строки.</li>
+            <li>В пункте <b>«Местоположение» (Геопозиция)</b> выберите <b>«Разрешить»</b>.</li>
+            <li>Нажмите кнопку «Разрешить» выше или обновите страницу (<b>F5</b>).</li>
+          </ol>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    document.body.classList.add('location-guard-active');
+
+    const reqBtn = overlay.querySelector('#btn-location-guard-request');
+    if (reqBtn) {
+      reqBtn.addEventListener('click', () => {
+        reqBtn.disabled = true;
+        reqBtn.innerHTML = `<span>Связь со спутниками GPS...</span>`;
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            Toast.success('Геопозиция подтверждена! Доступ разрешён.');
+            this.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            this.isVerified = true;
+            this.hideBlocker();
+            if (Auth.isLoggedIn() && !Auth.isAdmin()) {
+              API.post('/user/location', this.coords).catch(() => {});
+            }
+          },
+          (err) => {
+            reqBtn.disabled = false;
+            reqBtn.innerHTML = `<span>Повторить запрос</span>`;
+            let errText = 'Доступ к геопозиции всё ещё заблокирован браузером.';
+            if (err.code === err.PERMISSION_DENIED) {
+              errText = 'Запрос отклонён. Разрешите геопозицию в настройках браузера (значок замочка в строке адреса) и нажмите кнопку снова.';
+            }
+            Toast.error(errText);
+            const reasonEl = document.getElementById('location-guard-reason');
+            if (reasonEl) reasonEl.textContent = errText;
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      });
+    }
+
+    if (isAdmin) {
+      const bypassBtn = overlay.querySelector('#btn-admin-bypass-loc');
+      if (bypassBtn) {
+        bypassBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.hideBlocker();
+          Toast.info('Режим СБ: допуск предоставлен без передачи координат');
+        });
+      }
+    }
+  },
+
+  hideBlocker() {
+    const overlay = document.getElementById('location-guard-overlay');
+    if (overlay) {
+      overlay.classList.add('fade-out');
+      setTimeout(() => {
+        overlay.remove();
+        document.body.classList.remove('location-guard-active');
+      }, 300);
+    }
+  }
+};
+
+// Automatically enforce location check on protected pages
+function initLocationGuard() {
+  if (Auth.isLoggedIn() && window.location.pathname !== '/auth.html') {
+    LocationGuard.check();
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initLocationGuard);
+} else {
+  initLocationGuard();
+}

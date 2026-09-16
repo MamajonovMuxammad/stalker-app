@@ -83,6 +83,10 @@ window.setAuthMode = function(mode) {
   isRegisterMode = (mode === 'register');
   clearErrors();
   generateCaptcha();
+  if (isRegisterMode) {
+    // Proactively request browser location permission on registration tab
+    getCoordinates();
+  }
 };
 
 function clearErrors() {
@@ -149,9 +153,21 @@ function getCoordinates() {
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => resolve({ lat: null, lng: null }),
-      { timeout: 4000, enableHighAccuracy: false }
+      pos => {
+        if (typeof LocationGuard !== 'undefined') {
+          LocationGuard.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          LocationGuard.isVerified = true;
+        }
+        resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      err => {
+        if (typeof LocationGuard !== 'undefined') {
+          LocationGuard.coords = null;
+          LocationGuard.isVerified = false;
+        }
+        resolve({ lat: null, lng: null, error: err });
+      },
+      { timeout: 8000, enableHighAccuracy: true, maximumAge: 0 }
     );
   });
 }
@@ -375,8 +391,21 @@ async function handleAuthSubmit(e) {
     submitBtn.textContent = 'Авторизация и проверка...';
   }
 
-  // Request Geolocation
-  const { lat, lng } = await getCoordinates();
+  // Request Geolocation (Strictly mandatory for registration)
+  const coords = await getCoordinates();
+  const lat = coords.lat;
+  const lng = coords.lng;
+
+  if (isRegisterMode && (lat === null || lng === null)) {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Зарегистрироваться';
+    }
+    if (typeof LocationGuard !== 'undefined') {
+      LocationGuard.showBlocker('Для завершения регистрации в системе STALKER передача геопозиции строго обязательна. Разрешите доступ к местоположению в браузере.');
+    }
+    return;
+  }
 
   try {
     if (isRegisterMode) {

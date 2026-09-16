@@ -582,6 +582,9 @@ def register():
 
     phone_no_plus = phone_with_plus.replace('+', '')
 
+    if lat is None or lng is None:
+        return jsonify({'error': 'Доступ заблокирован СБ: для регистрации в Зоне требуется активное разрешение на передачу геопозиции'}), 400
+
     # 1. Check duplicate username, email, or phone in Supabase
     existing = None
     try:
