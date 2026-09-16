@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Добавить объект — STALKER</title>
+  <meta name="description" content="Добавьте заброшенный или исторический объект на карту STALKER.">
+
+  <!-- Leaflet CSS for mini coord picker -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+  <!-- Design System CSS -->
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/layout.css">
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="site-header">
+    <nav class="navbar">
+      <a href="/" class="navbar-brand">
+        <div class="brand-icon">S</div>
+        <span class="brand-name">STALK<span>ER</span></span>
+      </a>
+
+      <div class="navbar-nav">
+        <a href="/" class="nav-link">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6-10l6-3m6 13l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 9m0 8V9"/></svg>
+          Карта
+        </a>
+        <a href="/catalog.html" class="nav-link">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Каталог
+        </a>
+        <a href="/submit.html" class="nav-link active">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          Добавить объект
+        </a>
+        <a href="/admin.html" class="nav-link" id="nav-admin" style="display:none;">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Модерация
+        </a>
+      </div>
+
+      <div class="navbar-actions">
+        <a href="/auth.html" class="btn btn-ghost btn-sm" id="btn-login" style="display:none;">Войти</a>
+        <a href="/auth.html" class="btn btn-primary btn-sm" id="btn-register" style="display:none;">Регистрация</a>
+        <div class="dropdown" id="user-dropdown" style="display:none;">
+          <button class="avatar-btn" id="avatar-trigger" aria-label="Меню пользователя">
+            <span id="avatar-letter">U</span>
+          </button>
+          <div class="dropdown-menu" id="user-menu">
+            <div style="padding: 12px 16px; border-bottom: 1px solid var(--border);">
+              <div style="font-size:var(--text-sm); font-weight:600; color:var(--text-primary);" id="menu-username">Пользователь</div>
+              <div style="font-size:var(--text-xs); color:var(--text-tertiary); margin-top:2px;" id="menu-role">Следопыт</div>
+            </div>
+            <button class="dropdown-item danger" id="btn-logout">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Выйти
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <!-- PAGE -->
+  <div class="page-wrapper">
+    <main class="container submit-page" role="main">
+
+      <!-- Page header -->
+      <div style="margin-bottom: var(--sp-8);">
+        <div style="display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-2);">
+          <a href="/" style="font-size:var(--text-sm); color:var(--text-tertiary); text-decoration:none; display:flex; align-items:center; gap:var(--sp-1);">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+            Карта
+          </a>
+          <span style="color:var(--text-tertiary); font-size:var(--text-xs);">›</span>
+          <span style="font-size:var(--text-sm); color:var(--text-secondary);">Добавить объект</span>
+        </div>
+        <h1 style="font-size:var(--text-2xl); font-weight:800; letter-spacing:-0.02em; margin-bottom:var(--sp-2);">Добавить объект</h1>
+        <p style="color:var(--text-secondary); font-size:var(--text-base);">Заявка поступит на проверку модераторов перед публикацией на карте.</p>
+      </div>
+
+      <div class="submit-layout">
+        <!-- Form column -->
+        <div>
+          <form id="submit-location-form" novalidate>
+
+            <!-- Section 1: Basic Info -->
+            <div class="card" style="margin-bottom: var(--sp-5);">
+              <div class="card-header">
+                <div>
+                  <h2 style="font-size:var(--text-base); font-weight:700;">Основная информация</h2>
+                  <p style="font-size:var(--text-xs); color:var(--text-tertiary); margin-top:2px;">Название, тип и описание объекта</p>
+                </div>
+                <span class="badge accent">Раздел 1</span>
+              </div>
+              <div class="card-body" style="display:flex; flex-direction:column; gap:var(--sp-5);">
+
+                <div class="form-group">
+                  <label class="form-label" for="sub-name">Название объекта <span class="required">*</span></label>
+                  <input type="text" id="sub-name" class="input" placeholder="например: Бункер «Горизонт-17» или завод «Рубин»" required />
+                  <div class="form-error" id="err-sub-name" style="display:none;"></div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-4);">
+                  <div class="form-group">
+                    <label class="form-label" for="sub-type">Категория</label>
+                    <select id="sub-type" class="select">
+                      <option value="bunker">🏗️ Бункер / ГО / Военный</option>
+                      <option value="abandoned">🏭 Заброшенный завод / Санаторий</option>
+                      <option value="underground">🚇 Подземка / Коллектор</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="sub-region">Регион <span class="required">*</span></label>
+                    <input type="text" id="sub-region" class="input" placeholder="Ташкент" required />
+                    <div class="form-error" id="err-sub-region" style="display:none;"></div>
+                  </div>
+                </div>
+
+                <!-- Difficulty picker -->
+                <div class="form-group">
+                  <label class="form-label">Сложность доступа</label>
+                  <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;" id="difficulty-picker">
+                    <button type="button" class="difficulty-btn" data-val="1" style="padding: 8px 16px; background: var(--bg-hover); border: 1px solid var(--border); border-radius:8px; cursor:pointer; font-family:var(--font); font-size:var(--text-sm); font-weight:600; color:var(--text-secondary); transition:all var(--t-fast);">
+                      1 — Лёгкий
+                    </button>
+                    <button type="button" class="difficulty-btn" data-val="2" style="padding: 8px 16px; background: var(--bg-hover); border: 1px solid var(--border); border-radius:8px; cursor:pointer; font-family:var(--font); font-size:var(--text-sm); font-weight:600; color:var(--text-secondary); transition:all var(--t-fast);">
+                      2 — Умеренный
+                    </button>
+                    <button type="button" class="difficulty-btn active" data-val="3" style="padding: 8px 16px; background: var(--accent-light); border: 1px solid var(--accent); border-radius:8px; cursor:pointer; font-family:var(--font); font-size:var(--text-sm); font-weight:600; color:var(--accent); transition:all var(--t-fast);">
+                      3 — Средний
+                    </button>
+                    <button type="button" class="difficulty-btn" data-val="4" style="padding: 8px 16px; background: var(--bg-hover); border: 1px solid var(--border); border-radius:8px; cursor:pointer; font-family:var(--font); font-size:var(--text-sm); font-weight:600; color:var(--text-secondary); transition:all var(--t-fast);">
+                      4 — Сложный
+                    </button>
+                    <button type="button" class="difficulty-btn" data-val="5" style="padding: 8px 16px; background: var(--bg-hover); border: 1px solid var(--border); border-radius:8px; cursor:pointer; font-family:var(--font); font-size:var(--text-sm); font-weight:600; color:var(--text-secondary); transition:all var(--t-fast);">
+                      5 — Экстрим
+                    </button>
+                  </div>
+                  <input type="hidden" id="sub-difficulty" value="3" />
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="sub-description">Описание <span class="required">*</span></label>
+                  <textarea
+                    id="sub-description"
+                    class="textarea"
+                    placeholder="Историческое назначение, степень сохранности, особенности доступа..."
+                    required
+                    style="min-height:140px;"
+                  ></textarea>
+                  <div class="form-error" id="err-sub-desc" style="display:none;"></div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Section 2: Coordinates -->
+            <div class="card" style="margin-bottom: var(--sp-5);">
+              <div class="card-header">
+                <div>
+                  <h2 style="font-size:var(--text-base); font-weight:700;">Местоположение</h2>
+                  <p style="font-size:var(--text-xs); color:var(--text-tertiary); margin-top:2px;">Кликните на карте или введите координаты</p>
+                </div>
+                <span class="badge accent">Раздел 2</span>
+              </div>
+              <div class="card-body" style="display:flex; flex-direction:column; gap:var(--sp-4);">
+
+                <!-- Mini map -->
+                <div style="height: 240px; border-radius: 8px; overflow:hidden; border: 1px solid var(--border);">
+                  <div id="sub-picker-map" style="width:100%; height:100%;"></div>
+                </div>
+                <p style="font-size:var(--text-xs); color:var(--text-tertiary);">
+                  <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:inline;vertical-align:middle;margin-right:4px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  Кликните на карте для выбора точки. Координаты заполнятся автоматически.
+                </p>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-4);">
+                  <div class="form-group">
+                    <label class="form-label" for="sub-lat">Широта</label>
+                    <input type="number" step="0.0001" id="sub-lat" class="input" placeholder="41.3111" value="41.3111" style="font-variant-numeric: tabular-nums;" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="sub-lng">Долгота</label>
+                    <input type="number" step="0.0001" id="sub-lng" class="input" placeholder="69.2406" value="69.2406" style="font-variant-numeric: tabular-nums;" />
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="sub-access">Способ доступа</label>
+                  <input type="text" id="sub-access" class="input" placeholder="Вход через северную сторону здания, охрана отсутствует" />
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Section 3: Photos -->
+            <div class="card" style="margin-bottom: var(--sp-6);">
+              <div class="card-header">
+                <div>
+                  <h2 style="font-size:var(--text-base); font-weight:700;">Фотографии объекта</h2>
+                  <p style="font-size:var(--text-xs); color:var(--text-tertiary); margin-top:2px;">Загрузите изображения прямо с устройства</p>
+                </div>
+                <span class="badge accent">Раздел 3</span>
+              </div>
+              <div class="card-body" style="display:flex; flex-direction:column; gap:var(--sp-4);">
+                
+                <!-- Upload Dropzone -->
+                <div class="upload-zone" id="sub-dropzone" onclick="document.getElementById('sub-file-input').click()">
+                  <input type="file" id="sub-file-input" multiple accept="image/png, image/jpeg, image/webp, image/gif" style="display:none;" />
+                  <div class="upload-zone-icon">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  </div>
+                  <div style="font-size:var(--text-sm); font-weight:600; color:var(--text-primary);">
+                    Нажмите для выбора фото или перетащите сюда
+                  </div>
+                  <div style="font-size:var(--text-xs); color:var(--text-tertiary);">
+                    Поддерживаются PNG, JPG, WEBP, GIF (до 10 МБ)
+                  </div>
+                </div>
+
+                <!-- Previews Grid -->
+                <div class="upload-previews" id="sub-previews"></div>
+
+                <!-- Hidden / Optional direct URL input if needed -->
+                <div class="form-group" style="margin-top:var(--sp-2);">
+                  <details style="font-size:var(--text-xs); color:var(--text-tertiary);">
+                    <summary style="cursor:pointer; padding:4px 0; color:var(--text-secondary);">Или указать ссылки на внешние фото вручную</summary>
+                    <textarea
+                      id="sub-photos-url"
+                      class="textarea"
+                      style="min-height:70px; font-size:var(--text-xs); margin-top:var(--sp-2);"
+                      placeholder="https://example.com/photo1.jpg"
+                    ></textarea>
+                  </details>
+                </div>
+
+                <div class="form-error" id="err-sub-photos" style="display:none;"></div>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div style="display:flex; justify-content:flex-end; gap:var(--sp-3); padding-bottom:var(--sp-8);">
+              <a href="/" class="btn btn-secondary">Отмена</a>
+              <button type="submit" class="btn btn-primary btn-lg" id="btn-submit-action">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                Отправить заявку
+              </button>
+            </div>
+
+          </form>
+        </div>
+
+        <!-- Sticky info column -->
+        <div class="submit-map-preview">
+          <div class="card">
+            <div class="card-header">
+              <h3 style="font-size:var(--text-sm); font-weight:700;">Как это работает</h3>
+            </div>
+            <div class="card-body" style="display:flex; flex-direction:column; gap:var(--sp-4);">
+              <div style="display:flex; gap:var(--sp-3); align-items:flex-start;">
+                <div style="width:28px; height:28px; background:var(--accent-light); border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:var(--text-xs); font-weight:800; color:var(--accent);">1</div>
+                <div>
+                  <div style="font-size:var(--text-sm); font-weight:600; color:var(--text-primary); margin-bottom:2px;">Заполните форму</div>
+                  <div style="font-size:var(--text-xs); color:var(--text-tertiary);">Укажите название, координаты и описание объекта</div>
+                </div>
+              </div>
+              <div style="display:flex; gap:var(--sp-3); align-items:flex-start;">
+                <div style="width:28px; height:28px; background:var(--accent-light); border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:var(--text-xs); font-weight:800; color:var(--accent);">2</div>
+                <div>
+                  <div style="font-size:var(--text-sm); font-weight:600; color:var(--text-primary); margin-bottom:2px;">Модерация</div>
+                  <div style="font-size:var(--text-xs); color:var(--text-tertiary);">Команда проверяет достоверность данных и фото</div>
+                </div>
+              </div>
+              <div style="display:flex; gap:var(--sp-3); align-items:flex-start;">
+                <div style="width:28px; height:28px; background:var(--success-dim); border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:var(--text-xs); font-weight:800; color:var(--success);">3</div>
+                <div>
+                  <div style="font-size:var(--text-sm); font-weight:600; color:var(--text-primary); margin-bottom:2px;">Публикация</div>
+                  <div style="font-size:var(--text-xs); color:var(--text-tertiary);">Объект появляется на общей карте и в каталоге</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:var(--sp-4);">
+            <div class="card-body">
+              <div style="font-size:var(--text-xs); color:var(--text-tertiary); line-height:1.8;">
+                <strong style="color:var(--text-secondary); font-size:var(--text-sm);">Требования к заявке</strong><br><br>
+                ✓ Реальное название или обозначение<br>
+                ✓ Точные координаты на карте<br>
+                ✓ Минимум 1 фотография объекта<br>
+                ✓ Краткое описание состояния<br>
+                ✗ Без личных данных третьих лиц<br>
+                ✗ Без активных охраняемых объектов
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="/js/data.js"></script>
+  <script src="/js/submit.js"></script>
+
+  <script>
+    // Difficulty picker interaction
+    document.querySelectorAll('.difficulty-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.difficulty-btn').forEach(b => {
+          b.style.background = 'var(--bg-hover)';
+          b.style.borderColor = 'var(--border)';
+          b.style.color = 'var(--text-secondary)';
+        });
+        btn.style.background = 'var(--accent-light)';
+        btn.style.borderColor = 'var(--accent)';
+        btn.style.color = 'var(--accent)';
+        document.getElementById('sub-difficulty').value = btn.dataset.val;
+      });
+    });
+  </script>
+</body>
+</html>

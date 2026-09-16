@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Панель модерации — STALKER</title>
+  <meta name="description" content="Административная панель модерации заявок на STALKER.">
+
+  <!-- Design System CSS -->
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/layout.css">
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="site-header">
+    <nav class="navbar">
+      <a href="/" class="navbar-brand">
+        <div class="brand-icon">S</div>
+        <span class="brand-name">STALK<span>ER</span></span>
+      </a>
+
+      <div class="navbar-nav">
+        <a href="/" class="nav-link">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6-10l6-3m6 13l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 9m0 8V9"/></svg>
+          Карта
+        </a>
+        <a href="/catalog.html" class="nav-link">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Каталог
+        </a>
+        <a href="/admin.html" class="nav-link active">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Модерация
+        </a>
+      </div>
+
+      <div class="navbar-actions">
+        <div class="dropdown" id="user-dropdown">
+          <button class="avatar-btn" id="avatar-trigger" aria-label="Меню пользователя">
+            <span id="avatar-letter">A</span>
+          </button>
+          <div class="dropdown-menu" id="user-menu">
+            <div style="padding: 12px 16px; border-bottom: 1px solid var(--border);">
+              <div style="font-size:var(--text-sm); font-weight:600; color:var(--text-primary);" id="menu-username">Admin</div>
+              <div style="font-size:var(--text-xs); color:var(--text-tertiary); margin-top:2px;" id="menu-role">Администратор</div>
+            </div>
+            <button class="dropdown-item danger" id="btn-logout">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Выйти
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <div class="page-wrapper">
+
+    <!-- Stats row -->
+    <div style="border-bottom: 1px solid var(--border); background: var(--bg-elevated);">
+      <div class="container" style="padding-top: var(--sp-6); padding-bottom: var(--sp-6);">
+        <div style="margin-bottom:var(--sp-4);">
+          <h1 style="font-size:var(--text-xl); font-weight:800; letter-spacing:-0.02em;">Панель модерации</h1>
+          <p style="font-size:var(--text-sm); color:var(--text-secondary); margin-top:var(--sp-1);">
+            Оператор: <span id="admin-user-callsign" style="color:var(--accent); font-weight:600;">загрузка...</span>
+          </p>
+        </div>
+        <div class="grid grid-4" id="admin-stats-bar" style="gap:var(--sp-4);">
+          <div class="card stat-card">
+            <div class="stat-value" id="stat-total-locs">0</div>
+            <div class="stat-label">Объектов на карте</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-value" style="color:var(--warning);" id="stat-pending-subs">0</div>
+            <div class="stat-label">На рассмотрении</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-value" style="color:var(--danger);" id="stat-rejected-subs">0</div>
+            <div class="stat-label">Отклонено</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-value" id="stat-users-count">0</div>
+            <div class="stat-label">Пользователей</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin layout -->
+    <div class="admin-layout">
+
+      <!-- Sidebar -->
+      <aside class="admin-sidebar" aria-label="Фильтры заявок">
+        <div class="admin-sidebar-title">Фильтр заявок</div>
+
+        <button class="admin-nav-item active" data-status="all">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          Все материалы
+          <span class="badge" id="count-all" style="margin-left:auto;">0</span>
+        </button>
+
+        <button class="admin-nav-item" data-status="pending">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          На рассмотрении
+          <span class="badge warning" id="count-pending" style="margin-left:auto;">0</span>
+        </button>
+
+        <button class="admin-nav-item" data-status="approved">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Одобренные
+          <span class="badge success" id="count-approved" style="margin-left:auto;">0</span>
+        </button>
+
+        <button class="admin-nav-item" data-status="rejected">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Отклонённые
+          <span class="badge danger" id="count-rejected" style="margin-left:auto;">0</span>
+        </button>
+
+        <hr style="margin: var(--sp-3) 0;">
+        <div class="admin-sidebar-title">Быстрые действия</div>
+        <a href="/submit.html" class="admin-nav-item" style="text-decoration:none;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          Добавить объект
+        </a>
+        <a href="/catalog.html" class="admin-nav-item" style="text-decoration:none;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Смотреть каталог
+        </a>
+      </aside>
+
+      <!-- Main content -->
+      <main class="admin-main" role="main">
+        <div class="section-header" style="margin-bottom: var(--sp-6);">
+          <div>
+            <h2 class="section-title" style="font-size:var(--text-lg);">Заявки</h2>
+            <p class="section-subtitle" style="font-size:var(--text-sm);">Верификация координат, фотоматериалов и принятие решений</p>
+          </div>
+        </div>
+
+        <div id="submissions-list">
+          <div class="empty-state">
+            <div class="loading-spinner"></div>
+          </div>
+        </div>
+      </main>
+
+    </div>
+  </div>
+
+  <!-- Reject Modal -->
+  <div class="modal-backdrop" id="reject-modal" role="dialog" aria-modal="true" aria-labelledby="modal-reject-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-reject-title">Отклонить заявку</h2>
+        <button class="modal-close" id="modal-close-btn" aria-label="Закрыть">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <p style="font-size:var(--text-sm); color:var(--text-secondary);">
+          Укажите причину отклонения. Пользователь увидит её в своём профиле.
+        </p>
+
+        <div class="form-group">
+          <label class="form-label" for="reject-resolution-input">Текст резолюции</label>
+          <textarea
+            id="reject-resolution-input"
+            class="textarea"
+            placeholder="Недостаточно фотографий: загружено 0 из 3 обязательных..."
+            style="min-height:100px;"
+          ></textarea>
+        </div>
+
+        <!-- Quick templates -->
+        <div>
+          <p style="font-size:var(--text-xs); color:var(--text-tertiary); margin-bottom:var(--sp-2);">Быстрые шаблоны:</p>
+          <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="setResolutionTemplate(1)">Недостаточно фото</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="setResolutionTemplate(2)">Неверные координаты</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="setResolutionTemplate(3)">Дубликат объекта</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-reject">Отмена</button>
+        <button class="btn btn-danger" id="btn-confirm-reject">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Отклонить
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <script src="/js/data.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

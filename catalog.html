@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Каталог объектов — STALKER</title>
+  <meta name="description" content="Полный каталог заброшенных, исторических и засекреченных объектов Ташкента и Узбекистана.">
+
+  <!-- Design System CSS -->
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/layout.css">
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="site-header">
+    <nav class="navbar">
+      <a href="/" class="navbar-brand">
+        <div class="brand-icon">S</div>
+        <span class="brand-name">STALK<span>ER</span></span>
+      </a>
+
+      <div class="navbar-nav">
+        <a href="/" class="nav-link">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6-10l6-3m6 13l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 9m0 8V9"/></svg>
+          Карта
+        </a>
+        <a href="/catalog.html" class="nav-link active">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Каталог
+        </a>
+        <a href="/submit.html" class="nav-link">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          Добавить объект
+        </a>
+        <a href="/admin.html" class="nav-link" id="nav-admin" style="display:none;">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Модерация
+        </a>
+      </div>
+
+      <div class="navbar-actions">
+        <a href="/auth.html" class="btn btn-ghost btn-sm" id="btn-login" style="display:none;">Войти</a>
+        <a href="/auth.html" class="btn btn-primary btn-sm" id="btn-register" style="display:none;">Регистрация</a>
+        <div class="dropdown" id="user-dropdown" style="display:none;">
+          <button class="avatar-btn" id="avatar-trigger" aria-label="Меню пользователя">
+            <span id="avatar-letter">U</span>
+          </button>
+          <div class="dropdown-menu" id="user-menu">
+            <div style="padding: 12px 16px; border-bottom: 1px solid var(--border);">
+              <div style="font-size:var(--text-sm); font-weight:600; color:var(--text-primary);" id="menu-username">Пользователь</div>
+              <div style="font-size:var(--text-xs); color:var(--text-tertiary); margin-top:2px;" id="menu-role">Следопыт</div>
+            </div>
+            <button class="dropdown-item danger" id="btn-logout">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Выйти
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <!-- PAGE CONTENT -->
+  <div class="page-wrapper">
+    <main class="container catalog-page" role="main">
+
+      <!-- Page header -->
+      <div class="section-header" style="padding-top: var(--sp-8);">
+        <div>
+          <h1 class="section-title">Каталог объектов</h1>
+          <p class="section-subtitle">Все заброшенные, исторические и секретные объекты Узбекистана</p>
+        </div>
+        <a href="/submit.html" class="btn btn-primary">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Добавить объект
+        </a>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="catalog-toolbar">
+        <div class="catalog-search input-wrapper">
+          <span class="input-icon">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </span>
+          <input
+            type="search"
+            id="catalog-search"
+            class="input"
+            placeholder="Поиск по названию, региону..."
+            aria-label="Поиск по каталогу"
+            style="padding-left:42px;"
+          />
+        </div>
+        <div class="catalog-filters chip-bar" id="catalog-chip-filters">
+          <button class="chip active" data-filter="all">Все категории</button>
+          <button class="chip" data-filter="bunker">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+            Бункеры
+          </button>
+          <button class="chip" data-filter="abandoned">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+            Заброшки
+          </button>
+          <button class="chip" data-filter="underground">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22V12m0 0L6 6m6 6l6-6M2 22h20"/></svg>
+            Подземка
+          </button>
+        </div>
+      </div>
+
+      <!-- Results count -->
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--sp-5);">
+        <span style="font-size:var(--text-sm); color:var(--text-tertiary);">
+          Найдено: <span id="catalog-count" style="font-weight:600; color:var(--text-primary);">0</span> объектов
+        </span>
+      </div>
+
+      <!-- Grid -->
+      <div class="grid grid-auto" id="catalog-grid">
+        <!-- rendered by catalog.js -->
+      </div>
+
+      <!-- Pagination -->
+      <div class="pagination" id="catalog-pagination" style="margin-top: var(--sp-10);"></div>
+
+    </main>
+  </div>
+
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <script src="/js/data.js"></script>
+  <script src="/js/catalog.js"></script>
+</body>
+</html>
